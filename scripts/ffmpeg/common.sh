@@ -39,7 +39,6 @@ COMMON_FLAGS=(
   --disable-avdevice
   --disable-avfilter
   --enable-pic
-  --enable-pthreads
   --enable-zlib
   --disable-encoders
   --disable-muxers

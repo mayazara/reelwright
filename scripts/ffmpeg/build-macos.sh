@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 fetch_source
 cd "${SRC}"
-./configure "${COMMON_FLAGS[@]}" \
+./configure "${COMMON_FLAGS[@]}" --enable-pthreads \
   --enable-videotoolbox --enable-audiotoolbox \
   --install-name-dir='@rpath'
 make -j"$(sysctl -n hw.ncpu)"

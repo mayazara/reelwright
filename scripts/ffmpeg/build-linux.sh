@@ -6,7 +6,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 fetch_source
 cd "${SRC}"
-./configure "${COMMON_FLAGS[@]}" --enable-vaapi --enable-libdrm
+./configure "${COMMON_FLAGS[@]}" --enable-pthreads --enable-vaapi --enable-libdrm
 make -j"$(nproc)"
 make install
 assert_lgpl

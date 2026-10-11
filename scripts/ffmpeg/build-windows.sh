@@ -30,7 +30,7 @@ fetch_source
 cd "${SRC}"
 make distclean >/dev/null 2>&1 || true
 ./configure "${COMMON_FLAGS[@]}" \
-  --target-os=mingw32 --arch=x86_64 \
+  --target-os=mingw32 --arch=x86_64 --enable-w32threads \
   --pkg-config-flags=--static \
   --extra-ldflags="-static -static-libgcc -static-libstdc++" \
   --extra-libs="-lstdc++ -lwinpthread" \
