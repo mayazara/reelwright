@@ -208,12 +208,7 @@ impl FrameSource {
                 (w.item, frame.pts, w.size).hash(&mut h);
                 Some((
                     slot,
-                    Layer {
-                        image: Arc::new(frame.image.clone()),
-                        key: h.finish(),
-                        rotation: w.rotation,
-                        opacity: 1.0,
-                    },
+                    Layer::image(Arc::new(frame.image.clone()), h.finish(), w.rotation),
                 ))
             })
             .collect();

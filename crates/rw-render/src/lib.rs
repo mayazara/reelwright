@@ -8,7 +8,7 @@
 mod compositor;
 mod gpu;
 
-pub use compositor::{Compositor, Layer};
+pub use compositor::{Compositor, Layer, OUTPUT_FORMAT, Source};
 pub use gpu::Gpu;
 
 #[derive(Debug, thiserror::Error)]

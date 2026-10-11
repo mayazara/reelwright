@@ -3150,6 +3150,9 @@ dependencies = [
 [[package]]
 name = "rw-fx"
 version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "rw-media"
@@ -3182,6 +3185,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "pollster 1.0.1",
+ "rw-fx",
  "rw-media",
  "rw-model",
  "thiserror 2.0.21",

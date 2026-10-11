@@ -55,7 +55,7 @@ fn frames_follow_the_audio_clock() {
                 clock - f.t
             );
             assert_eq!(
-                gray_index(&f.layers[0].image),
+                gray_index(f.layers[0].as_image().unwrap()),
                 fps.time_to_frame(f.t),
                 "picture matches its time"
             );

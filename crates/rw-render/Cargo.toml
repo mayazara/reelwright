@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 rw-model.workspace = true
 rw-media.workspace = true
+rw-fx.workspace = true
 wgpu.workspace = true
 pollster.workspace = true
 bytemuck.workspace = true
