@@ -356,6 +356,118 @@ fn set_colorspace(ctx: &mut scaling::Context, f: &ff::frame::Video) {
     }
 }
 
+/// Converts decoded audio to interleaved stereo `f32` at [`SAMPLE_RATE`].
+///
+/// Uses libswresample directly with explicit channel layouts: the binding's
+/// wrapper chooses between old and new layout APIs by FFmpeg version and
+/// rejects frames whose layout has "unspecified" order (PCM in WAV) on some
+/// versions.
+struct Resampler {
+    ctx: *mut ff::ffi::SwrContext,
+    /// (sample format, sample rate, channel count) of the input it was made for.
+    key: (i32, i32, i32),
+    out: Vec<f32>,
+}
+
+impl Resampler {
+    fn key(frame: &ff::frame::Audio) -> (i32, i32, i32) {
+        // SAFETY: reading plain fields of a live frame.
+        unsafe {
+            let f = frame.as_ptr();
+            ((*f).format, (*f).sample_rate, (*f).ch_layout.nb_channels)
+        }
+    }
+
+    fn new(frame: &ff::frame::Audio, fallback_channels: i32) -> Result<Self, MediaError> {
+        let key = Self::key(frame);
+        // SAFETY: layouts are initialised before use and uninitialised after;
+        // `ctx` is checked for null and owned by the returned value. The
+        // input sample format comes from a decoded frame, so it is a valid
+        // `AVSampleFormat` discriminant.
+        unsafe {
+            let f = frame.as_ptr();
+            let mut in_layout: ff::ffi::AVChannelLayout = std::mem::zeroed();
+            if (*f).ch_layout.order == ff::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC
+                || (*f).ch_layout.nb_channels <= 0
+            {
+                let n = if (*f).ch_layout.nb_channels > 0 {
+                    (*f).ch_layout.nb_channels
+                } else {
+                    fallback_channels
+                };
+                ff::ffi::av_channel_layout_default(&mut in_layout, n);
+            } else if ff::ffi::av_channel_layout_copy(&mut in_layout, &(*f).ch_layout) < 0 {
+                return Err(MediaError::Decode("unusable channel layout".into()));
+            }
+            let mut out_layout: ff::ffi::AVChannelLayout = std::mem::zeroed();
+            ff::ffi::av_channel_layout_default(&mut out_layout, CHANNELS as i32);
+            let mut ctx: *mut ff::ffi::SwrContext = std::ptr::null_mut();
+            let in_format: ff::ffi::AVSampleFormat = std::mem::transmute((*f).format);
+            let r = ff::ffi::swr_alloc_set_opts2(
+                &mut ctx,
+                &out_layout,
+                ff::ffi::AVSampleFormat::AV_SAMPLE_FMT_FLT,
+                SAMPLE_RATE as i32,
+                &in_layout,
+                in_format,
+                (*f).sample_rate,
+                0,
+                std::ptr::null_mut(),
+            );
+            ff::ffi::av_channel_layout_uninit(&mut in_layout);
+            ff::ffi::av_channel_layout_uninit(&mut out_layout);
+            if r < 0 || ctx.is_null() || ff::ffi::swr_init(ctx) < 0 {
+                if !ctx.is_null() {
+                    ff::ffi::swr_free(&mut ctx);
+                }
+                return Err(MediaError::Decode(format!(
+                    "can't convert audio ({} Hz, {} channels)",
+                    (*f).sample_rate,
+                    (*f).ch_layout.nb_channels
+                )));
+            }
+            Ok(Resampler {
+                ctx,
+                key,
+                out: Vec::new(),
+            })
+        }
+    }
+
+    /// Converts one frame into `self.out`; returns sample frames written.
+    fn convert(&mut self, frame: &ff::frame::Audio) -> Result<usize, MediaError> {
+        // SAFETY: `ctx` is a live initialised context; the output buffer has
+        // room for `capacity` stereo frames; input pointers come from a live
+        // decoded frame. `as _` adapts to the pointer constness, which
+        // differs between FFmpeg versions.
+        unsafe {
+            let f = frame.as_ptr();
+            let in_samples = (*f).nb_samples;
+            let capacity = ff::ffi::swr_get_out_samples(self.ctx, in_samples).max(0) as usize + 64;
+            self.out.resize(capacity * CHANNELS, 0.0);
+            let mut out_ptr = self.out.as_mut_ptr() as *mut u8;
+            let n = ff::ffi::swr_convert(
+                self.ctx,
+                &mut out_ptr as *mut *mut u8 as _,
+                capacity as i32,
+                (*f).extended_data as _,
+                in_samples,
+            );
+            if n < 0 {
+                return Err(decode_err(ff::Error::from(n)));
+            }
+            Ok(n as usize)
+        }
+    }
+}
+
+impl Drop for Resampler {
+    fn drop(&mut self) {
+        // SAFETY: `ctx` was allocated by swr_alloc_set_opts2 and is freed once.
+        unsafe { ff::ffi::swr_free(&mut self.ctx) }
+    }
+}
+
 /// Reads audio as interleaved stereo `f32` at [`SAMPLE_RATE`].
 pub struct AudioReader {
     ictx: Input,
@@ -363,12 +475,7 @@ pub struct AudioReader {
     decoder: ff::decoder::Audio,
     tb: ff::Rational,
     origin: Time,
-    resampler: Option<(
-        ff::software::resampling::Context,
-        ff::format::Sample,
-        u64,
-        u32,
-    )>,
+    resampler: Option<Resampler>,
     decoded: ff::frame::Audio,
     /// Converted samples not yet returned.
     buffer: Vec<f32>,
@@ -441,55 +548,18 @@ impl AudioReader {
     }
 
     fn resample(&mut self) -> Result<(), MediaError> {
-        // Some decoders (e.g. PCM in WAV) report an "unspecified order"
-        // layout with no channel mask, which the resampler rejects. Give
-        // such frames the default layout for their channel count.
-        if self.decoded.channel_layout().bits() == 0 {
-            let channels = self
-                .decoded
-                .channel_layout()
-                .channels()
-                .max(i32::from(self.decoder.channels()))
-                .max(1);
-            // SAFETY: `decoded` holds a live frame; we replace its layout
-            // with a freshly initialised default one of the same width.
-            unsafe {
-                let frame = self.decoded.as_mut_ptr();
-                ff::ffi::av_channel_layout_uninit(&mut (*frame).ch_layout);
-                ff::ffi::av_channel_layout_default(&mut (*frame).ch_layout, channels);
-            }
+        let fallback = i32::from(self.decoder.channels()).max(1);
+        let key = Resampler::key(&self.decoded);
+        if self.resampler.as_ref().is_none_or(|r| r.key != key) {
+            self.resampler = Some(Resampler::new(&self.decoded, fallback)?);
         }
-        let f = &self.decoded;
-        let layout = f.channel_layout();
-        let key = (f.format(), layout.bits(), f.rate());
-        if self
-            .resampler
-            .as_ref()
-            .is_none_or(|(_, fmt, l, r)| (*fmt, *l, *r) != key)
-        {
-            let ctx = ff::software::resampling::Context::get(
-                f.format(),
-                layout,
-                f.rate(),
-                ff::format::Sample::F32(ff::format::sample::Type::Packed),
-                ff::ChannelLayout::STEREO,
-                SAMPLE_RATE,
-            )
-            .map_err(decode_err)?;
-            self.resampler = Some((ctx, key.0, key.1, key.2));
+        let r = self.resampler.as_mut().expect("just set");
+        let n = r.convert(&self.decoded)?;
+        let out = std::mem::take(&mut r.out);
+        self.push(&out[..n * CHANNELS]);
+        if let Some(r) = self.resampler.as_mut() {
+            r.out = out;
         }
-        let (ctx, ..) = self.resampler.as_mut().expect("just set");
-        let capacity = f.samples() * SAMPLE_RATE as usize / f.rate().max(1) as usize + 512;
-        let mut out = ff::frame::Audio::new(
-            ff::format::Sample::F32(ff::format::sample::Type::Packed),
-            capacity,
-            ff::ChannelLayout::STEREO,
-        );
-        ctx.run(f, &mut out).map_err(decode_err)?;
-        let n = out.samples() * CHANNELS;
-        let data = out.data(0);
-        let floats: &[f32] = bytemuck_cast(&data[..n * 4]);
-        self.push(floats);
         Ok(())
     }
 
@@ -565,18 +635,4 @@ impl AudioReader {
         self.position += sample_time(n / CHANNELS);
         Ok(n)
     }
-}
-
-/// Reinterprets native-endian bytes as `f32`s.
-fn bytemuck_cast(bytes: &[u8]) -> &[f32] {
-    let (head, floats, tail) = unsafe {
-        // SAFETY: every bit pattern is a valid f32; alignment is checked by
-        // `align_to`, which puts any misaligned bytes in head/tail.
-        bytes.align_to::<f32>()
-    };
-    assert!(
-        head.is_empty() && tail.is_empty(),
-        "FFmpeg audio buffers are aligned"
-    );
-    floats
 }
