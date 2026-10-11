@@ -110,11 +110,21 @@ impl Mixer {
                 }
             };
             let offset = ((a - start) as usize) * CHANNELS;
-            for (o, s) in out[offset..offset + got]
-                .iter_mut()
-                .zip(&self.scratch[..got])
+            let look = &item.look;
+            let faded = look.fade_in > rw_model::Time::ZERO || look.fade_out > rw_model::Time::ZERO;
+            for (f, (o, s)) in out[offset..offset + got]
+                .chunks_mut(CHANNELS)
+                .zip(self.scratch[..got].chunks(CHANNELS))
+                .enumerate()
             {
-                *o += s * gain;
+                let g = if faded {
+                    gain * look.fade_at(sample_to_time(a + f as i64) - item.start, item.duration)
+                } else {
+                    gain
+                };
+                for (o, s) in o.iter_mut().zip(s) {
+                    *o += s * g;
+                }
             }
         }
         let calls = self.calls;

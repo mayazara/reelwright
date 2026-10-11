@@ -2,8 +2,8 @@
 
 use rw_cache::ProjectCache;
 use rw_media::{VideoFrame, VideoReader};
-use rw_model::{Item, ItemId, MediaKind, MediaRef, Project, Time, TrackKind};
-use rw_render::{Layer, fit_contain};
+use rw_model::{Fit, Generated, Item, ItemId, Look, MediaKind, MediaRef, Project, Time, TrackKind};
+use rw_render::{Layer, Source};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
@@ -24,13 +24,26 @@ pub fn visible_items(project: &Project, t: Time) -> Vec<&Item> {
 
 /// Decode size for `media` drawn into an output of `out`: the coded-orientation
 /// size that fills its letterboxed rectangle, never larger than the source.
-pub fn decode_size(media: &MediaRef, out: (u32, u32)) -> (u32, u32) {
+///
+/// Accounts for the clip's look: a small picture-in-picture box needs fewer
+/// pixels, a tight crop needs more (the kept area is what fills the box).
+pub fn decode_size(media: &MediaRef, out: (u32, u32), look: &Look) -> (u32, u32) {
     let Some(v) = &media.info.video else {
         return out;
     };
     let display = v.display_size();
-    let (_, _, w, h) = fit_contain(display, out);
-    let (w, h) = (w.min(display.0 as f32), h.min(display.1 as f32));
+    let t = look.transform;
+    let (kx, ky) = look.crop.kept();
+    let (bw, bh) = (t.size[0] * out.0 as f32, t.size[1] * out.1 as f32);
+    let (cw, ch) = (display.0 as f32 * kx, display.1 as f32 * ky);
+    // Size the kept area is drawn at, then scale back up to the whole frame.
+    let s = match t.fit {
+        Fit::Contain => (bw / cw).min(bh / ch),
+        Fit::Cover => (bw / cw).max(bh / ch),
+        Fit::Stretch => (bw / cw).max(bh / ch),
+    };
+    let w = (display.0 as f32 * s).min(display.0 as f32);
+    let h = (display.1 as f32 * s).min(display.1 as f32);
     let even = |x: f32| ((x / 2.0).round() as u32).max(1) * 2;
     if v.rotation % 180 == 90 {
         (even(h), even(w))
@@ -131,7 +144,7 @@ impl FrameSource {
             item: item.id,
             path,
             still: media.kind() == MediaKind::Image,
-            size: decode_size(media, out),
+            size: decode_size(media, out, &item.look),
             source_t,
             rotation: media.info.video.as_ref().map_or(0, |v| v.rotation),
         }
@@ -200,7 +213,7 @@ impl FrameSource {
             })
         };
 
-        let mut layers: Vec<(usize, Layer)> = results
+        let mut decoded: HashMap<usize, Layer> = results
             .into_iter()
             .filter_map(|(w, frame)| {
                 let (slot, frame) = (w.slot?, frame?);
@@ -212,7 +225,34 @@ impl FrameSource {
                 ))
             })
             .collect();
-        layers.sort_by_key(|(slot, _)| *slot);
+        // One layer per visible clip, bottom first, with its look; fades
+        // fold into opacity.
+        let mut layers: Vec<(usize, Layer)> = Vec::new();
+        for (slot, item) in visible_items(project, t).into_iter().enumerate() {
+            let mut layer = match item.generated_fill() {
+                Some(Generated::Solid { color }) => Layer {
+                    source: Source::Solid(color),
+                    key: 0,
+                    rotation: 0,
+                    look: Look::default(),
+                },
+                Some(Generated::Gradient { from, to, angle }) => Layer {
+                    source: Source::Gradient { from, to, angle },
+                    key: 0,
+                    rotation: 0,
+                    look: Look::default(),
+                },
+                None => match decoded.remove(&slot) {
+                    Some(l) => l,
+                    None => continue,
+                },
+            };
+            layer.look = item.look.clone();
+            layer.look.opacity *= item.look.fade_at(t - item.start, item.duration);
+            if layer.look.opacity > 0.0 {
+                layers.push((slot, layer));
+            }
+        }
         self.readers.retain(|_, e| calls - e.last_used < IDLE_CALLS);
         layers.into_iter().map(|(_, l)| l).collect()
     }
@@ -256,11 +296,39 @@ mod tests {
 
     #[test]
     fn decode_size_fits_output_without_upscaling() {
-        assert_eq!(decode_size(&video(3840, 2160, 0), (960, 540)), (960, 540));
-        assert_eq!(decode_size(&video(640, 360, 0), (1920, 1080)), (640, 360));
+        assert_eq!(
+            decode_size(&video(3840, 2160, 0), (960, 540), &Look::default()),
+            (960, 540)
+        );
+        assert_eq!(
+            decode_size(&video(640, 360, 0), (1920, 1080), &Look::default()),
+            (640, 360)
+        );
         // Rotated portrait phone video in a 16:9 preview: display 1080x1920
         // fits as ~304x540, coded orientation is swapped.
-        assert_eq!(decode_size(&video(1920, 1080, 90), (960, 540)), (540, 304));
+        assert_eq!(
+            decode_size(&video(1920, 1080, 90), (960, 540), &Look::default()),
+            (540, 304)
+        );
+    }
+
+    #[test]
+    fn decode_size_follows_box_and_crop() {
+        let v = video(3840, 2160, 0);
+        // Quarter-size picture-in-picture decodes at a quarter.
+        let mut pip = Look::default();
+        pip.transform.size = [0.25, 0.25];
+        assert_eq!(decode_size(&v, (1920, 1080), &pip), (480, 270));
+        // Keeping the middle half fills the frame from half the pixels: the
+        // whole frame decodes at twice the output size.
+        let mut cropped = Look::default();
+        cropped.crop = rw_model::Crop {
+            left: 0.25,
+            right: 0.25,
+            top: 0.25,
+            bottom: 0.25,
+        };
+        assert_eq!(decode_size(&v, (1920, 1080), &cropped), (3840, 2160));
     }
 
     #[test]
