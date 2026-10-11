@@ -23,11 +23,20 @@ impl Gpu {
 
     /// Creates a device without a window, for export jobs and tests. Prefers
     /// a real GPU and falls back to a software adapter (lavapipe, WARP).
+    /// Set `RW_GPU_FALLBACK=1` to use only the software adapter.
     pub fn headless() -> Result<Self, RenderError> {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let mut last = String::from("no adapters");
-        for fallback in [false, true] {
+        // RW_GPU_FALLBACK=1 forces the software adapter (used to make golden
+        // images on the same renderer CI uses).
+        let only_fallback = std::env::var("RW_GPU_FALLBACK").is_ok_and(|v| v == "1");
+        let order: &[bool] = if only_fallback {
+            &[true]
+        } else {
+            &[false, true]
+        };
+        for &fallback in order {
             let options = wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 force_fallback_adapter: fallback,

@@ -1,0 +1,284 @@
+//! Golden-frame tests: every filter, blend mode, colour control and a set of
+//! transforms, rendered from a synthetic scene and compared with stored PNGs.
+//!
+//! References live in `tests/golden/`. Regenerate them (on the software
+//! renderer CI uses) with:
+//! `RW_GPU_FALLBACK=1 RW_UPDATE_GOLDEN=1 cargo test -p rw-render --test golden`
+//! and review the diff before committing.
+
+use rw_media::RgbaImage;
+use rw_model::{BlendMode, ColorControl, Crop, Filter, Fit, Layout, Look, Rgba, Transform};
+use rw_render::{Compositor, Gpu, Layer, Source};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+const SIZE: (u32, u32) = (128, 72);
+
+fn gpu() -> Option<Gpu> {
+    match Gpu::headless() {
+        Ok(g) => Some(g),
+        Err(e) if std::env::var("RW_REQUIRE_GPU").is_ok_and(|v| v == "1") => panic!("{e}"),
+        Err(e) => {
+            eprintln!("skipping golden tests: {e}");
+            None
+        }
+    }
+}
+
+/// A picture with hue sweep, a grey ramp, skin-like tones and a soft edge:
+/// enough variety to show what any adjustment does.
+fn base_picture() -> Arc<RgbaImage> {
+    let (w, h) = (96u32, 54u32);
+    let mut px = Vec::with_capacity((w * h * 4) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            let fx = x as f32 / (w - 1) as f32;
+            let fy = y as f32 / (h - 1) as f32;
+            let c = if fy < 0.4 {
+                // Hue sweep.
+                let hsv = rw_hsv(fx * 360.0, 0.85, 0.9);
+                [hsv[0], hsv[1], hsv[2]]
+            } else if fy < 0.6 {
+                let v = (fx * 255.0) as u8;
+                [v, v, v]
+            } else {
+                // Warm skin-like tones fading to a cool shadow.
+                let t = fx;
+                [
+                    (224.0 - 150.0 * t) as u8,
+                    (172.0 - 100.0 * t) as u8,
+                    (140.0 - 40.0 * t) as u8,
+                ]
+            };
+            px.extend([c[0], c[1], c[2], 255]);
+        }
+    }
+    Arc::new(RgbaImage::new(w, h, px))
+}
+
+fn rw_hsv(h: f32, s: f32, v: f32) -> [u8; 3] {
+    let c = v * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = v - c;
+    let (r, g, b) = match (h / 60.0) as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    [
+        ((r + m) * 255.0) as u8,
+        ((g + m) * 255.0) as u8,
+        ((b + m) * 255.0) as u8,
+    ]
+}
+
+fn base_layer() -> Layer {
+    Layer::image(base_picture(), 1, 0)
+}
+
+fn golden_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
+}
+
+/// Per-pixel tolerance: GPUs differ slightly in filtering and rounding.
+const PIXEL_TOL: u8 = 6;
+/// Share of pixels allowed beyond `PIXEL_TOL` (edges, rotated sampling).
+const OUTLIER_SHARE: f64 = 0.01;
+/// Largest average shift of any channel, in 8-bit levels.
+const MEAN_TOL: f64 = 0.75;
+
+fn compare(name: &str, got: &RgbaImage) -> Result<(), String> {
+    let path = golden_dir().join(format!("{name}.png"));
+    if std::env::var("RW_UPDATE_GOLDEN").is_ok_and(|v| v == "1") {
+        got.save_png(&path).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    let want = RgbaImage::load_png(&path)
+        .map_err(|e| format!("{name}: no golden image ({e}); see the module docs"))?;
+    if (want.width, want.height) != (got.width, got.height) {
+        return Err(format!(
+            "{name}: size {}x{} vs {}x{}",
+            got.width, got.height, want.width, want.height
+        ));
+    }
+    let mut outliers = 0usize;
+    let mut worst = 0u8;
+    // Signed mean per channel catches small uniform shifts (a slightly
+    // different grade) that stay under the per-pixel tolerance.
+    let mut sum = [0i64; 3];
+    for (a, b) in got.pixels.chunks(4).zip(want.pixels.chunks(4)) {
+        let d = (0..3).map(|k| a[k].abs_diff(b[k])).max().unwrap_or(0);
+        worst = worst.max(d);
+        if d > PIXEL_TOL {
+            outliers += 1;
+        }
+        for k in 0..3 {
+            sum[k] += i64::from(a[k]) - i64::from(b[k]);
+        }
+    }
+    let n = f64::from(got.width * got.height);
+    let mean = sum.map(|s| s as f64 / n);
+    let mean_abs = mean.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    if std::env::var("RW_GOLDEN_STATS").is_ok() {
+        eprintln!("{name}: worst {worst}, outliers {outliers}, mean shift {mean_abs:.3}");
+    }
+    if mean_abs > MEAN_TOL {
+        return Err(format!(
+            "{name}: average colour shifted by {mean_abs:.2} levels (allowed {MEAN_TOL})"
+        ));
+    }
+    let share = outliers as f64 / n;
+    if share > OUTLIER_SHARE {
+        let diff = golden_dir().join(format!("{name}.actual.png"));
+        let _ = got.save_png(&diff);
+        return Err(format!(
+            "{name}: {:.2} % of pixels differ by more than {PIXEL_TOL} (worst {worst}); actual saved to {}",
+            share * 100.0,
+            diff.display()
+        ));
+    }
+    Ok(())
+}
+
+fn render(gpu: &Gpu, layers: &[Layer]) -> RgbaImage {
+    let mut c = Compositor::new(gpu, SIZE);
+    c.render(Rgba([24, 26, 30, 255]), layers);
+    c.read_back().unwrap()
+}
+
+fn check_all(cases: Vec<(String, Vec<Layer>)>) {
+    let Some(gpu) = gpu() else { return };
+    let failures: Vec<String> = cases
+        .into_iter()
+        .filter_map(|(name, layers)| compare(&name, &render(&gpu, &layers)).err())
+        .collect();
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}
+
+#[test]
+fn every_filter() {
+    let cases = rw_fx::filters()
+        .iter()
+        .map(|f| {
+            let mut l = base_layer();
+            l.look.filter = Some(Filter {
+                id: f.id.into(),
+                intensity: 1.0,
+            });
+            (format!("filter-{}", f.id), vec![l])
+        })
+        .chain(std::iter::once({
+            let mut l = base_layer();
+            l.look.filter = Some(Filter {
+                id: "vivid".into(),
+                intensity: 0.5,
+            });
+            ("filter-vivid-half".to_owned(), vec![l])
+        }))
+        .collect();
+    check_all(cases);
+}
+
+#[test]
+fn every_blend_mode() {
+    // A vertical gradient strip over the base picture, partly transparent
+    // at the edges, in each blend mode.
+    let cases = BlendMode::ALL
+        .iter()
+        .map(|mode| {
+            let mut top = Layer {
+                source: Source::Gradient {
+                    from: Rgba([30, 60, 200, 255]),
+                    to: Rgba([250, 230, 120, 255]),
+                    angle: 90.0,
+                },
+                key: 0,
+                rotation: 0,
+                look: Look::default(),
+            };
+            top.look.blend = *mode;
+            top.look.transform = Transform {
+                center: [0.5, 0.5],
+                size: [0.6, 1.0],
+                ..Transform::default()
+            };
+            (
+                format!("blend-{mode:?}").to_lowercase(),
+                vec![base_layer(), top],
+            )
+        })
+        .collect();
+    check_all(cases);
+}
+
+#[test]
+fn every_colour_control() {
+    let mut cases = Vec::new();
+    for c in ColorControl::ALL {
+        for (suffix, at_end) in [("min", false), ("max", true)] {
+            let r = c.range();
+            let v = if at_end { *r.end() } else { *r.start() } * 0.75;
+            let mut l = base_layer();
+            l.look.color.set(c, v);
+            cases.push((
+                format!("colour-{}-{suffix}", c.label().to_lowercase()),
+                vec![l],
+            ));
+        }
+    }
+    check_all(cases);
+}
+
+#[test]
+fn transforms_crops_and_opacity() {
+    let with = |f: &dyn Fn(&mut Look)| {
+        let mut l = base_layer();
+        f(&mut l.look);
+        vec![l]
+    };
+    let cases = vec![
+        ("transform-fit".to_owned(), with(&|_| {})),
+        (
+            "transform-fill".to_owned(),
+            with(&|l| l.transform.fit = Fit::Cover),
+        ),
+        (
+            "transform-rotate-30".to_owned(),
+            with(&|l| l.transform.rotation = 30.0),
+        ),
+        (
+            "transform-flip-both".to_owned(),
+            with(&|l| {
+                l.transform.flip_h = true;
+                l.transform.flip_v = true;
+            }),
+        ),
+        (
+            "transform-pip".to_owned(),
+            with(&|l| l.transform = Layout::TopRight.apply(l.transform)),
+        ),
+        (
+            "transform-split".to_owned(),
+            with(&|l| l.transform = Layout::SplitLeft.apply(l.transform)),
+        ),
+        (
+            "crop-square".to_owned(),
+            with(&|l| l.crop = Crop::to_ratio((96, 54), 1.0)),
+        ),
+        (
+            "crop-corner".to_owned(),
+            with(&|l| {
+                l.crop = Crop {
+                    left: 0.5,
+                    top: 0.4,
+                    ..Crop::default()
+                }
+            }),
+        ),
+        ("opacity-40".to_owned(), with(&|l| l.opacity = 0.4)),
+    ];
+    check_all(cases);
+}
