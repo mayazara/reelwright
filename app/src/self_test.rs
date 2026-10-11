@@ -56,11 +56,13 @@ fn checks(r: &mut String) -> bool {
     let out = dir.join("check.mp4");
     let result = (|| -> Result<(), String> {
         let mut comp = Compositor::new(&gpu, (320, 240));
-        let mut look = Look::default();
-        look.filter = Some(rw_model::Filter {
-            id: "warm".into(),
-            intensity: 1.0,
-        });
+        let look = Look {
+            filter: Some(rw_model::Filter {
+                id: "warm".into(),
+                intensity: 1.0,
+            }),
+            ..Look::default()
+        };
         let layer = Layer {
             source: Source::Solid(Rgba([40, 160, 140, 255])),
             key: 0,
