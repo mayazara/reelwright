@@ -143,6 +143,7 @@ fn preview_panel(ui: &mut egui::Ui, s: &mut Session, tokens: Tokens, out: &mut V
     );
     if playing {
         let st = s.player.stats();
+        meter(&mut bar, st.level, tokens);
         if st.dropped > 0 {
             bar.label(
                 RichText::new(format!("{} dropped", st.dropped))
@@ -152,6 +153,56 @@ fn preview_panel(ui: &mut egui::Ui, s: &mut Session, tokens: Tokens, out: &mut V
         }
     }
     ui.allocate_rect(full, egui::Sense::hover());
+}
+
+/// Stereo level meter with a peak marker that holds, then falls.
+fn meter(ui: &mut egui::Ui, level: [f32; 2], tokens: Tokens) {
+    const HOLD: f64 = 1.5;
+    let now = ui.input(|i| i.time);
+    let id = ui.make_persistent_id("master-meter");
+    let mut held: [(f32, f64); 2] = ui.data(|d| d.get_temp(id)).unwrap_or_default();
+    for (h, l) in held.iter_mut().zip(level) {
+        if l >= h.0 || now - h.1 > HOLD {
+            *h = (l, now);
+        }
+    }
+    ui.data_mut(|d| d.insert_temp(id, held));
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(90.0, 14.0), egui::Sense::hover());
+    let db = |v: f32| {
+        if v <= 1e-4 {
+            -60.0
+        } else {
+            (20.0 * v.log10()).clamp(-60.0, 0.0)
+        }
+    };
+    let frac = |v: f32| (db(v) + 60.0) / 60.0;
+    for (ch, (l, (peak, _))) in level.iter().zip(held).enumerate() {
+        let row = egui::Rect::from_min_size(
+            rect.min + egui::vec2(0.0, ch as f32 * 7.0),
+            egui::vec2(rect.width(), 6.0),
+        );
+        ui.painter().rect_filled(row, 1.0, tokens.surface_raised);
+        let color = if db(*l) > -1.0 {
+            tokens.danger
+        } else if db(*l) > -9.0 {
+            tokens.highlight
+        } else {
+            tokens.accent
+        };
+        let fill =
+            egui::Rect::from_min_size(row.min, egui::vec2(row.width() * frac(*l), row.height()));
+        ui.painter().rect_filled(fill, 1.0, color);
+        let px = row.left() + row.width() * frac(peak);
+        ui.painter().line_segment(
+            [egui::pos2(px, row.top()), egui::pos2(px, row.bottom())],
+            egui::Stroke::new(2.0, tokens.text),
+        );
+    }
+    resp.on_hover_text(format!(
+        "Output level: L {:.1} dB, R {:.1} dB",
+        db(level[0]),
+        db(level[1])
+    ));
 }
 
 impl TabViewer for Viewer<'_> {
@@ -192,6 +243,7 @@ impl TabViewer for Viewer<'_> {
                         selection: &mut s.selection,
                         textures: self.textures,
                         peaks: &mut s.peaks_cache,
+                        strips: &mut s.strips,
                         cache: &s.cache,
                         tokens: self.tokens,
                         playing,

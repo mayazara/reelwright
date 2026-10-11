@@ -20,7 +20,7 @@ use rw_cache::ProjectCache;
 use rw_model::{Project, Time};
 use rw_render::Layer;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -48,14 +48,18 @@ pub struct Stats {
     pub max_lag: AtomicU64,
     /// Samples the output wanted but the producer hadn't mixed yet.
     pub underrun_samples: AtomicU64,
+    /// Peak level of the last block played, per channel (`f32` bits).
+    pub level: [AtomicU32; 2],
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct StatsSnapshot {
     pub shown: u64,
     pub dropped: u64,
     pub max_lag: Time,
     pub underrun_samples: u64,
+    /// Peak of the most recent audio block, left and right, `0.0..`.
+    pub level: [f32; 2],
 }
 
 impl Stats {
@@ -65,6 +69,10 @@ impl Stats {
             dropped: self.dropped.load(Ordering::Relaxed),
             max_lag: Time(self.max_lag.load(Ordering::Relaxed) as i64),
             underrun_samples: self.underrun_samples.load(Ordering::Relaxed),
+            level: [
+                f32::from_bits(self.level[0].load(Ordering::Relaxed)),
+                f32::from_bits(self.level[1].load(Ordering::Relaxed)),
+            ],
         }
     }
 }
@@ -287,6 +295,14 @@ impl Player {
         let pull = Box::new(move |buf: &mut [f32]| {
             let n = cons.pop_slice(buf);
             buf[n..].fill(0.0);
+            let mut peak = [0.0f32; 2];
+            for frame in buf[..n].as_chunks::<CHANNELS>().0 {
+                peak[0] = peak[0].max(frame[0].abs());
+                peak[1] = peak[1].max(frame[1].abs());
+            }
+            for (slot, p) in pull_stats.level.iter().zip(peak) {
+                slot.store(p.to_bits(), Ordering::Relaxed);
+            }
             pull_stats
                 .underrun_samples
                 .fetch_add(((buf.len() - n) / CHANNELS) as u64, Ordering::Relaxed);

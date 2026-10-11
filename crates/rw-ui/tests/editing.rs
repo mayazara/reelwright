@@ -241,3 +241,68 @@ fn export_from_the_editor() {
         "{notices:?}"
     );
 }
+
+#[test]
+fn markers_from_keyboard_are_edit_points() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut h = harness(tmp.path());
+    project_with(&mut h, &["still.png"]);
+    let still = media_id(&h, "still.png");
+    let ed = h.state_mut().editor_mut();
+    ed.apply(EditorAction::AppendMedia(still));
+    ed.apply(EditorAction::Seek(Time::from_millis(1500)));
+    h.run_ok();
+    h.key_press(egui::Key::M);
+    h.run_ok();
+    let markers = h
+        .state()
+        .editor()
+        .session
+        .as_ref()
+        .unwrap()
+        .project
+        .markers
+        .clone();
+    assert_eq!(markers.len(), 1);
+    assert_eq!(markers[0].at, Time::from_millis(1500));
+
+    // ↓ from the start stops at the marker before the clip end (5 s).
+    h.state_mut()
+        .editor_mut()
+        .apply(EditorAction::Seek(Time::ZERO));
+    h.run_ok();
+    h.key_press(egui::Key::ArrowDown);
+    h.run_ok();
+    assert_eq!(
+        h.state().editor().session.as_ref().unwrap().playhead(),
+        Time::from_millis(1500)
+    );
+
+    h.state_mut()
+        .editor_mut()
+        .apply(EditorAction::RemoveMarker(markers[0].id));
+    h.run_ok();
+    assert!(
+        h.state()
+            .editor()
+            .session
+            .as_ref()
+            .unwrap()
+            .project
+            .markers
+            .is_empty()
+    );
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+    h.run_ok();
+    assert_eq!(
+        h.state()
+            .editor()
+            .session
+            .as_ref()
+            .unwrap()
+            .project
+            .markers
+            .len(),
+        1
+    );
+}

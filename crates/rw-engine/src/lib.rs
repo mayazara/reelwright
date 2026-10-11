@@ -4,6 +4,7 @@
 //! Import pipeline, background media jobs, timeline evaluation and export.
 
 pub mod export;
+pub mod filmstrip;
 pub mod frames;
 pub mod import;
 pub mod jobs;

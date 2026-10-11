@@ -707,7 +707,7 @@ fn shortcuts(ctx: &egui::Context) -> Vec<EditorAction> {
     use EditorAction as A;
     let cmd = Modifiers::COMMAND;
     let cmd_shift = Modifiers::COMMAND.plus(Modifiers::SHIFT);
-    let table: [(Modifiers, Key, A); 17] = [
+    let table: [(Modifiers, Key, A); 18] = [
         (cmd_shift, Key::G, A::Ungroup),
         (cmd, Key::G, A::Group),
         (cmd, Key::D, A::Duplicate),
@@ -721,6 +721,7 @@ fn shortcuts(ctx: &egui::Context) -> Vec<EditorAction> {
         (Modifiers::NONE, Key::Backspace, A::Delete { ripple: false }),
         (Modifiers::NONE, Key::Space, A::PlayPause),
         (Modifiers::NONE, Key::S, A::SplitAtPlayhead),
+        (Modifiers::NONE, Key::M, A::AddMarker),
         (Modifiers::NONE, Key::ArrowLeft, A::StepFrames(-1)),
         (Modifiers::NONE, Key::ArrowRight, A::StepFrames(1)),
         (Modifiers::NONE, Key::ArrowUp, A::PrevEdit),

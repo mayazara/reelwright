@@ -3,4 +3,4 @@
 pub mod logic;
 pub mod widget;
 
-pub use widget::{PeaksCache, TimelineState};
+pub use widget::{PeaksCache, StripCache, TimelineState};

@@ -31,6 +31,10 @@ pub enum MediaEvent {
         hash: ContentHash,
         result: Result<Option<PathBuf>, String>,
     },
+    Filmstrip {
+        hash: ContentHash,
+        result: Result<Option<PathBuf>, String>,
+    },
     ProxyProgress {
         hash: ContentHash,
         fraction: f32,
@@ -175,6 +179,20 @@ impl MediaJobs {
                 result,
             });
         });
+        if media.info.video.is_some() && media.kind() != rw_model::MediaKind::Image {
+            let (c, m) = (cache.clone(), media.clone());
+            let cancel = self.cancel_flag();
+            self.submit(false, move |s| {
+                let result = crate::filmstrip::ensure(&c, &m, &cancel);
+                if matches!(result, Err(MediaError::Cancelled)) {
+                    return;
+                }
+                s.emit(MediaEvent::Filmstrip {
+                    hash: m.hash.clone(),
+                    result: result.map_err(|e| e.to_string()),
+                });
+            });
+        }
         if media.info.audio.is_some() {
             let (c, m) = (cache.clone(), media.clone());
             let cancel = self.cancel_flag();

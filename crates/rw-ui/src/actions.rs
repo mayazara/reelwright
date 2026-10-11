@@ -4,7 +4,7 @@
 
 use crate::timeline::logic::DropRow;
 use rw_edit::timeline::TimelineOp;
-use rw_model::{MediaId, Time};
+use rw_model::{MarkerId, MediaId, Time};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EditorAction {
@@ -36,4 +36,7 @@ pub enum EditorAction {
     /// Add media at the playhead (bin double-click or "Add to timeline").
     AppendMedia(MediaId),
     Export,
+    AddMarker,
+    RemoveMarker(MarkerId),
+    MoveMarker(MarkerId, Time),
 }

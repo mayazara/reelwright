@@ -177,3 +177,119 @@ impl Command for SetCanvas {
         std::mem::swap(&mut project.canvas, &mut self.canvas);
     }
 }
+
+/// Adds a timeline marker.
+#[derive(Debug)]
+pub struct AddMarker {
+    marker: rw_model::Marker,
+}
+
+impl AddMarker {
+    pub fn new(at: rw_model::Time) -> Self {
+        AddMarker {
+            marker: rw_model::Marker {
+                id: rw_model::MarkerId::new(),
+                at: at.max(rw_model::Time::ZERO),
+                label: String::new(),
+            },
+        }
+    }
+
+    pub fn id(&self) -> rw_model::MarkerId {
+        self.marker.id
+    }
+}
+
+impl Command for AddMarker {
+    fn label(&self) -> String {
+        "Add marker".into()
+    }
+
+    fn apply(&mut self, project: &mut Project) -> Result<(), EditError> {
+        if project.markers.iter().any(|m| m.at == self.marker.at) {
+            return Err(EditError::Invalid("there's already a marker here".into()));
+        }
+        project.markers.push(self.marker.clone());
+        project.markers.sort_by_key(|m| m.at);
+        Ok(())
+    }
+
+    fn revert(&mut self, project: &mut Project) {
+        project.markers.retain(|m| m.id != self.marker.id);
+    }
+}
+
+/// Removes a marker.
+#[derive(Debug)]
+pub struct RemoveMarker {
+    id: rw_model::MarkerId,
+    removed: Option<(usize, rw_model::Marker)>,
+}
+
+impl RemoveMarker {
+    pub fn new(id: rw_model::MarkerId) -> Self {
+        RemoveMarker { id, removed: None }
+    }
+}
+
+impl Command for RemoveMarker {
+    fn label(&self) -> String {
+        "Remove marker".into()
+    }
+
+    fn apply(&mut self, project: &mut Project) -> Result<(), EditError> {
+        let i = project
+            .markers
+            .iter()
+            .position(|m| m.id == self.id)
+            .ok_or(EditError::NotFound("marker"))?;
+        self.removed = Some((i, project.markers.remove(i)));
+        Ok(())
+    }
+
+    fn revert(&mut self, project: &mut Project) {
+        if let Some((i, m)) = self.removed.take() {
+            project.markers.insert(i.min(project.markers.len()), m);
+        }
+    }
+}
+
+/// Moves a marker.
+#[derive(Debug)]
+pub struct MoveMarker {
+    id: rw_model::MarkerId,
+    at: rw_model::Time,
+}
+
+impl MoveMarker {
+    pub fn new(id: rw_model::MarkerId, at: rw_model::Time) -> Self {
+        MoveMarker {
+            id,
+            at: at.max(rw_model::Time::ZERO),
+        }
+    }
+}
+
+impl Command for MoveMarker {
+    fn label(&self) -> String {
+        "Move marker".into()
+    }
+
+    fn apply(&mut self, project: &mut Project) -> Result<(), EditError> {
+        let m = project
+            .markers
+            .iter_mut()
+            .find(|m| m.id == self.id)
+            .ok_or(EditError::NotFound("marker"))?;
+        std::mem::swap(&mut m.at, &mut self.at);
+        project.markers.sort_by_key(|m| m.at);
+        Ok(())
+    }
+
+    fn revert(&mut self, project: &mut Project) {
+        if let Some(m) = project.markers.iter_mut().find(|m| m.id == self.id) {
+            std::mem::swap(&mut m.at, &mut self.at);
+        }
+        project.markers.sort_by_key(|m| m.at);
+    }
+}

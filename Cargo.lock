@@ -2997,6 +2997,8 @@ dependencies = [
  "rw-media",
  "rw-model",
  "rw-render",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.21",
  "tracing",

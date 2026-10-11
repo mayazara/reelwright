@@ -278,6 +278,16 @@ impl Session {
             EditorAction::AppendMedia(media) => self.append_media(media),
             // Export is run by the UI, which owns the GPU and dialogs.
             EditorAction::Export => {}
+            EditorAction::AddMarker => {
+                let at = self.playhead();
+                let _ = self.execute(Box::new(rw_edit::commands::AddMarker::new(at)));
+            }
+            EditorAction::RemoveMarker(id) => {
+                let _ = self.execute(Box::new(rw_edit::commands::RemoveMarker::new(id)));
+            }
+            EditorAction::MoveMarker(id, at) => {
+                let _ = self.execute(Box::new(rw_edit::commands::MoveMarker::new(id, at)));
+            }
         }
     }
 }

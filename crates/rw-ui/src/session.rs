@@ -1,7 +1,7 @@
 //! An open project: the document, its history, cache and autosave state.
 
 use crate::preview::{Preview, UiGpu};
-use crate::timeline::{PeaksCache, TimelineState};
+use crate::timeline::{PeaksCache, StripCache, TimelineState};
 use rw_audio::output::OutputFactory;
 use rw_cache::ProjectCache;
 use rw_edit::{Command, Compound, EditError, History, commands::AddMedia};
@@ -51,6 +51,7 @@ pub struct Session {
     pub timeline: TimelineState,
     pub clipboard: Clipboard,
     pub peaks_cache: PeaksCache,
+    pub strips: StripCache,
     /// Present when the UI has a GPU (always in the app; not in tests).
     pub preview: Option<Preview>,
     /// Bumped on every project change; the preview re-renders on change.
@@ -86,6 +87,7 @@ impl Session {
             timeline: TimelineState::new(),
             clipboard: Clipboard::default(),
             peaks_cache: PeaksCache::default(),
+            strips: StripCache::default(),
             revision: 0,
             preview_size: (project.canvas.width / 2, project.canvas.height / 2),
             dir,
@@ -266,6 +268,14 @@ impl Session {
                     },
                 );
                 Some(path)
+            }
+            MediaEvent::Filmstrip { hash, result } => {
+                if let Err(e) = result {
+                    tracing::warn!(error = %e, "filmstrip failed");
+                }
+                self.strips.forget(&hash);
+                let media = self.project.media.iter().find(|m| m.hash == hash)?;
+                Some(rw_engine::filmstrip::paths(&self.cache, media).0)
             }
             MediaEvent::Peaks { hash, result } => {
                 let path = self.cache.peaks(&hash);

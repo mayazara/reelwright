@@ -12,6 +12,7 @@ use eframe::egui::{
 };
 use rw_cache::ProjectCache;
 use rw_edit::timeline::{Edge, Placement, TimelineOp, TrackChange};
+use rw_engine::filmstrip::{self, FilmstripInfo};
 use rw_media::Peaks;
 use rw_model::{Item, ItemId, MediaId, MediaKind, Project, Time, TrackKind, track_kind_for};
 use std::collections::{BTreeSet, HashMap};
@@ -46,9 +47,36 @@ impl PeaksCache {
     }
 }
 
+/// Filmstrip layouts, read once per media file.
+#[derive(Default)]
+pub struct StripCache {
+    infos: HashMap<rw_model::ContentHash, Option<FilmstripInfo>>,
+}
+
+impl StripCache {
+    pub fn get(
+        &mut self,
+        cache: &ProjectCache,
+        media: &rw_model::MediaRef,
+    ) -> Option<FilmstripInfo> {
+        *self
+            .infos
+            .entry(media.hash.clone())
+            .or_insert_with(|| filmstrip::load_info(cache, media))
+    }
+
+    pub fn forget(&mut self, hash: &rw_model::ContentHash) {
+        self.infos.remove(hash);
+    }
+}
+
 #[derive(Debug, Clone)]
 enum Drag {
     Playhead,
+    Marker {
+        id: rw_model::MarkerId,
+        at: Time,
+    },
     Move {
         items: Vec<ItemId>,
         anchor: Item,
@@ -84,6 +112,8 @@ pub struct TimelineState {
     pub scroll_y: f32,
     drag: Option<Drag>,
     context_item: Option<ItemId>,
+    context_marker: Option<rw_model::MarkerId>,
+    context_track: Option<rw_model::TrackId>,
     /// Fit the whole project on the next frame.
     pub fit_pending: bool,
 }
@@ -104,6 +134,7 @@ pub struct Ctx<'a> {
     pub selection: &'a mut BTreeSet<ItemId>,
     pub textures: &'a mut Textures,
     pub peaks: &'a mut PeaksCache,
+    pub strips: &'a mut StripCache,
     pub cache: &'a ProjectCache,
     pub tokens: Tokens,
     pub playing: bool,
@@ -175,6 +206,13 @@ fn toolbar(
             .clicked()
         {
             out.push(EditorAction::SplitAtPlayhead);
+        }
+        if ui
+            .button("Marker")
+            .on_hover_text("Add a marker at the playhead (M)")
+            .clicked()
+        {
+            out.push(EditorAction::AddMarker);
         }
         let any = !ctx.selection.is_empty();
         if ui
@@ -322,6 +360,40 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
         tick += step;
     }
 
+    // Markers: flags on the ruler and a faint line through the tracks.
+    let marker_at = |p: Pos2| -> Option<rw_model::MarkerId> {
+        project
+            .markers
+            .iter()
+            .find(|m| {
+                (x_of(m.at) - p.x).abs() <= 6.0 && p.y <= ruler.bottom() + 2.0 && p.y >= ruler.top()
+            })
+            .map(|m| m.id)
+    };
+    for m in &project.markers {
+        let shown_at = match &state.drag {
+            Some(Drag::Marker { id, at }) if *id == m.id => *at,
+            _ => m.at,
+        };
+        let x = x_of(shown_at);
+        if x < ruler.left() || x > ruler.right() {
+            continue;
+        }
+        painter.line_segment(
+            [pos2(x, ruler.bottom()), pos2(x, area.bottom())],
+            Stroke::new(1.0, t.highlight.gamma_multiply(0.5)),
+        );
+        painter.add(egui::Shape::convex_polygon(
+            vec![
+                pos2(x, ruler.bottom() - 2.0),
+                pos2(x - 5.0, ruler.bottom() - 10.0),
+                pos2(x + 5.0, ruler.bottom() - 10.0),
+            ],
+            t.highlight,
+            Stroke::NONE,
+        ));
+    }
+
     // ---- Track headers and rows ----
     let body_painter = ui.painter_at(Rect::from_min_max(
         pos2(area.left(), tracks.top()),
@@ -378,6 +450,45 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
             FontId::proportional(12.0),
             t.text,
         );
+        let header_resp = ui.interact(
+            hr,
+            egui::Id::new(("track-header", track.id)),
+            Sense::click(),
+        );
+        if header_resp.secondary_clicked() {
+            state.context_track = Some(track.id);
+        }
+        if state.context_track == Some(track.id) {
+            let gain = track.gain;
+            header_resp.context_menu(|ui| {
+                ui.label("Track volume");
+                let id = ui.make_persistent_id(("track-gain", track.id));
+                let current = crate::inspector::gain_to_db(gain);
+                let mut db: f32 = ui.data(|d| d.get_temp(id)).unwrap_or(current);
+                let r = ui.add(egui::Slider::new(&mut db, -60.0..=12.0).suffix(" dB"));
+                if r.changed() {
+                    ui.data_mut(|d| d.insert_temp(id, db));
+                }
+                if (r.drag_stopped() || (r.changed() && !r.dragged()))
+                    && (db - current).abs() > 0.01
+                {
+                    ui.data_mut(|d| d.remove::<f32>(id));
+                    out.push(EditorAction::Op(TimelineOp::SetTrack {
+                        track: track.id,
+                        change: TrackChange::Gain(crate::inspector::db_to_gain(db)),
+                    }));
+                }
+            });
+        }
+        if track.gain != 1.0 {
+            body_painter.text(
+                hr.right_top() + vec2(-6.0, 6.0),
+                Align2::RIGHT_TOP,
+                format!("{:+.0} dB", crate::inspector::gain_to_db(track.gain)),
+                FontId::proportional(10.0),
+                t.text_muted,
+            );
+        }
         let mut header_ui = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(Rect::from_min_size(
@@ -493,6 +604,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 track.hidden || moving,
                 ctx.textures,
                 ctx.peaks,
+                ctx.strips,
                 ui.ctx(),
             );
         }
@@ -545,7 +657,13 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
     if body_resp.drag_started()
         && let Some(p) = ui.input(|i| i.pointer.press_origin())
     {
-        state.drag = if ruler.contains(p) {
+        state.drag = if let Some(id) = marker_at(p) {
+            project
+                .markers
+                .iter()
+                .find(|m| m.id == id)
+                .map(|m| Drag::Marker { id, at: m.at })
+        } else if ruler.contains(p) {
             Some(Drag::Playhead)
         } else if let Some((ti, item, rect)) = hit_item(p) {
             if project.tracks[ti].locked {
@@ -599,6 +717,15 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
         candidates.push(ctx.playhead);
         match drag {
             Drag::Playhead => out.push(EditorAction::Seek(time_at(p.x))),
+            Drag::Marker { id, at } => {
+                let mut tt = time_at(p.x);
+                if snap_on {
+                    let own = project.markers.iter().find(|m| m.id == *id).map(|m| m.at);
+                    candidates.retain(|c| Some(*c) != own);
+                    tt = logic::snap(tt, &candidates, snap_threshold);
+                }
+                *at = tt;
+            }
             Drag::Move {
                 items,
                 anchor,
@@ -721,6 +848,11 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
     {
         match drag {
             Drag::Playhead => {}
+            Drag::Marker { id, at } => {
+                if project.markers.iter().any(|m| m.id == id && m.at != at) {
+                    out.push(EditorAction::MoveMarker(id, at));
+                }
+            }
             Drag::Move {
                 items,
                 delta,
@@ -808,7 +940,12 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
     if body_resp.secondary_clicked()
         && let Some(p) = body_resp.interact_pointer_pos()
     {
-        state.context_item = hit_item(p).map(|(_, i, _)| i.id);
+        state.context_marker = marker_at(p);
+        state.context_item = if state.context_marker.is_some() {
+            None
+        } else {
+            hit_item(p).map(|(_, i, _)| i.id)
+        };
         if let Some(id) = state.context_item
             && !ctx.selection.contains(&id)
         {
@@ -816,7 +953,14 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
             ctx.selection.insert(id);
         }
     }
-    if let Some(id) = state.context_item {
+    if let Some(id) = state.context_marker {
+        body_resp.context_menu(|ui| {
+            if ui.button("Remove marker").clicked() {
+                out.push(EditorAction::RemoveMarker(id));
+                ui.close();
+            }
+        });
+    } else if let Some(id) = state.context_item {
         body_resp.context_menu(|ui| {
             item_menu(ui, project, id, &mut out);
         });
@@ -967,6 +1111,7 @@ fn draw_item(
     dimmed: bool,
     textures: &mut Textures,
     peaks: &mut PeaksCache,
+    strips: &mut StripCache,
     egui_ctx: &egui::Context,
 ) {
     let t = paint.tokens;
@@ -982,26 +1127,57 @@ fn draw_item(
     let inner = r.shrink(2.0);
     let visible = clip.clip_rect();
 
-    // Thumbnails along visual clips.
-    if !audio_row
-        && let Some(m) = media.filter(|m| m.kind() != MediaKind::Audio)
-        && let Some(tex) = textures.get(egui_ctx, &paint.cache.thumbnail(&m.hash))
-    {
-        let size = tex.size_vec2();
-        let h = inner.height() - 14.0;
-        let w = (h * size.x / size.y).max(8.0);
-        let mut x = inner.left();
-        while x < inner.right() {
-            let tile = Rect::from_min_size(pos2(x, inner.top() + 14.0), vec2(w, h));
-            if tile.right() > visible.left() && tile.left() < visible.right() {
-                clip.image(
-                    tex.id(),
-                    tile.intersect(inner),
-                    uv_for(tile, inner),
-                    Color32::from_white_alpha(if dimmed { 90 } else { 220 }),
-                );
+    // Pictures along visual clips: filmstrip tiles for the source time at
+    // each position, or the single thumbnail until the filmstrip is ready.
+    if !audio_row && let Some(m) = media.filter(|m| m.kind() != MediaKind::Audio) {
+        let strip = strips.get(paint.cache, m).and_then(|info| {
+            textures
+                .get(egui_ctx, &filmstrip::paths(paint.cache, m).0)
+                .map(|tex| (info, tex))
+        });
+        let thumb = if strip.is_none() {
+            textures.get(egui_ctx, &paint.cache.thumbnail(&m.hash))
+        } else {
+            None
+        };
+        let aspect = match (&strip, &thumb) {
+            (Some((info, _)), _) => info.tile_width as f32 / info.tile_height as f32,
+            (None, Some(tex)) => tex.size_vec2().x / tex.size_vec2().y,
+            _ => 0.0,
+        };
+        if aspect > 0.0 {
+            let h = inner.height() - 14.0;
+            let w = (h * aspect).max(8.0);
+            let tint = Color32::from_white_alpha(if dimmed { 90 } else { 220 });
+            let secs_per_px = item.duration.as_secs_f64() / f64::from(r.width().max(1.0));
+            // Start at a multiple of the tile width so tiles don't swim
+            // while scrolling.
+            let mut x = inner.left() + ((visible.left() - inner.left()).max(0.0) / w).floor() * w;
+            while x < inner.right().min(visible.right()) {
+                let tile = Rect::from_min_size(pos2(x, inner.top() + 14.0), vec2(w, h));
+                let shown = tile.intersect(inner);
+                match (&strip, &thumb) {
+                    (Some((info, tex)), _) => {
+                        let src = item.source_in
+                            + Time::from_secs_f64(f64::from(x - r.left()) * secs_per_px);
+                        let (tx, ty, tw, th) = info.tile_rect(info.tile_at(src));
+                        let (iw, ih) = info.image_size();
+                        let sub = uv_for(tile, inner);
+                        let (u0, v0) = (tx as f32 / iw as f32, ty as f32 / ih as f32);
+                        let (du, dv) = (tw as f32 / iw as f32, th as f32 / ih as f32);
+                        let uv = Rect::from_min_max(
+                            pos2(u0 + sub.min.x * du, v0 + sub.min.y * dv),
+                            pos2(u0 + sub.max.x * du, v0 + sub.max.y * dv),
+                        );
+                        clip.image(tex.id(), shown, uv, tint);
+                    }
+                    (None, Some(tex)) => {
+                        clip.image(tex.id(), shown, uv_for(tile, inner), tint);
+                    }
+                    _ => {}
+                }
+                x += w;
             }
-            x += w;
         }
     }
 

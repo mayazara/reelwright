@@ -181,10 +181,11 @@ pub fn compatible(track: TrackKind, item: TrackKind) -> bool {
     }
 }
 
-/// Edit points: item starts and ends on every track, plus zero.
+/// Edit points: item starts and ends on every track, markers, and zero.
 pub fn edit_points(project: &Project) -> Vec<Time> {
     let mut v: Vec<Time> = std::iter::once(Time::ZERO)
         .chain(project.items().flat_map(|i| [i.start, i.end()]))
+        .chain(project.markers.iter().map(|m| m.at))
         .collect();
     v.sort();
     v.dedup();

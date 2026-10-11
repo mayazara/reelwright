@@ -204,3 +204,27 @@ proptest! {
         prop_assert_eq!(&p, &tip);
     }
 }
+
+#[test]
+fn markers_add_move_remove_undo() {
+    let mut p = Project::new("m", Canvas::default());
+    let mut h = History::new();
+    let add = AddMarker::new(Time::from_secs(3));
+    let id = add.id();
+    h.execute(&mut p, Box::new(add)).unwrap();
+    assert!(
+        h.execute(&mut p, Box::new(AddMarker::new(Time::from_secs(3))))
+            .is_err(),
+        "no duplicates"
+    );
+    h.execute(&mut p, Box::new(AddMarker::new(Time::from_secs(1))))
+        .unwrap();
+    assert_eq!(p.markers[0].at, Time::from_secs(1), "kept sorted");
+    h.execute(&mut p, Box::new(MoveMarker::new(id, Time::ZERO)))
+        .unwrap();
+    assert_eq!(p.markers[0].id, id);
+    h.execute(&mut p, Box::new(RemoveMarker::new(id))).unwrap();
+    assert_eq!(p.markers.len(), 1);
+    while h.undo(&mut p).is_some() {}
+    assert!(p.markers.is_empty());
+}
