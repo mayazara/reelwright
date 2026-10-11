@@ -391,9 +391,20 @@ impl Mp4Writer {
         self.drain_video()?;
         self.encode_audio(true)?;
         self.octx.write_trailer().map_err(encode_err)?;
-        let Mp4Writer { path, partial, .. } = self;
-        // Everything else (including the muxer's file handle) is closed by
-        // now: Windows refuses to rename a file that is still open.
+        let Mp4Writer {
+            octx,
+            path,
+            partial,
+            video,
+            audio,
+            ..
+        } = self;
+        // Close the file before renaming: Windows refuses to rename an open
+        // file. (Fields left in `..` would only drop at the end of the
+        // function, so the muxer is dropped explicitly.)
+        drop(audio);
+        drop(video);
+        drop(octx);
         std::fs::rename(&partial, &path)?;
         Ok(path)
     }
