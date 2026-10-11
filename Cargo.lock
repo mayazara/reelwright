@@ -2945,6 +2945,11 @@ dependencies = [
 [[package]]
 name = "rw-audio"
 version = "0.1.0"
+dependencies = [
+ "rw-media",
+ "rw-model",
+ "tracing",
+]
 
 [[package]]
 name = "rw-cache"
@@ -2973,11 +2978,14 @@ name = "rw-engine"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
+ "rw-audio",
  "rw-cache",
  "rw-edit",
  "rw-media",
  "rw-model",
+ "rw-render",
  "tempfile",
+ "thiserror 2.0.21",
  "tracing",
 ]
 
@@ -3013,6 +3021,15 @@ dependencies = [
 [[package]]
 name = "rw-render"
 version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "pollster 1.0.1",
+ "rw-media",
+ "rw-model",
+ "thiserror 2.0.21",
+ "tracing",
+ "wgpu",
+]
 
 [[package]]
 name = "rw-text"

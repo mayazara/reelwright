@@ -1,9 +1,10 @@
 //! Playback clock, A/V sync, preview scheduler, background jobs and export
 //! job runner.
 //!
-//! M1 provides the import pipeline and background media jobs; playback and
-//! export arrive in M2.
+//! Import pipeline, background media jobs, timeline evaluation and export.
 
+pub mod export;
+pub mod frames;
 pub mod import;
 pub mod jobs;
 

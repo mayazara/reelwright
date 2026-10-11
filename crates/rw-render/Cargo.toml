@@ -8,6 +8,13 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+rw-model.workspace = true
+rw-media.workspace = true
+wgpu.workspace = true
+pollster.workspace = true
+bytemuck.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true
