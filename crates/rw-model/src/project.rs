@@ -142,7 +142,13 @@ pub enum TrackKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ItemKind {
-    Media { media: MediaId },
+    Media {
+        media: MediaId,
+    },
+    /// A solid colour or gradient (backgrounds); no media file.
+    Generated {
+        fill: crate::visual::Generated,
+    },
 }
 
 /// Highest item or track gain, +12 dB.
@@ -184,6 +190,9 @@ pub struct Item {
     /// the sound is not played twice.
     #[serde(default, skip_serializing_if = "is_false")]
     pub audio_detached: bool,
+    /// Placement, crop, blending, colour and fades.
+    #[serde(default, skip_serializing_if = "crate::visual::Look::is_default")]
+    pub look: crate::visual::Look,
 }
 
 impl Item {
@@ -199,6 +208,23 @@ impl Item {
             gain: 1.0,
             muted: false,
             audio_detached: false,
+            look: crate::visual::Look::default(),
+        }
+    }
+
+    /// A new generated clip (colour or gradient) of the default length.
+    pub fn generated(fill: crate::visual::Generated, start: Time) -> Self {
+        Item {
+            id: ItemId::new(),
+            start,
+            duration: IMAGE_DURATION,
+            source_in: Time::ZERO,
+            kind: ItemKind::Generated { fill },
+            group: None,
+            gain: 1.0,
+            muted: false,
+            audio_detached: false,
+            look: crate::visual::Look::default(),
         }
     }
 
@@ -209,6 +235,14 @@ impl Item {
     pub fn media(&self) -> Option<MediaId> {
         match self.kind {
             ItemKind::Media { media } => Some(media),
+            ItemKind::Generated { .. } => None,
+        }
+    }
+
+    pub fn generated_fill(&self) -> Option<crate::visual::Generated> {
+        match self.kind {
+            ItemKind::Generated { fill } => Some(fill),
+            ItemKind::Media { .. } => None,
         }
     }
 

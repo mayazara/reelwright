@@ -566,6 +566,17 @@ enum Gen {
         track: usize,
         on: bool,
     },
+    Look {
+        item: usize,
+        fade_in: i64,
+        fade_out: i64,
+        scale: u8,
+        opacity: u8,
+    },
+    Fill {
+        item: usize,
+        shade: u8,
+    },
     Undo,
     Redo,
 }
@@ -574,7 +585,7 @@ fn any_edit() -> impl Strategy<Value = Gen> {
     let i = 0usize..12;
     let t = -2i64..40;
     prop_oneof![
-        3 => (0usize..3, 0usize..6, any::<bool>(), t.clone()).prop_map(|(media, track, new_track, at)| Gen::Insert { media, track, new_track, at }),
+        3 => (0usize..4, 0usize..6, any::<bool>(), t.clone()).prop_map(|(media, track, new_track, at)| Gen::Insert { media, track, new_track, at }),
         2 => (i.clone(), -8i64..8, proptest::option::of(0usize..6)).prop_map(|(item, delta, track)| Gen::Move { item, delta, track }),
         2 => (i.clone(), any::<bool>(), t.clone(), any::<bool>()).prop_map(|(item, start, to, ripple)| Gen::Trim { item, start, to, ripple }),
         1 => (i.clone(), 0i64..12).prop_map(|(item, to)| Gen::Slip { item, to }),
@@ -586,6 +597,9 @@ fn any_edit() -> impl Strategy<Value = Gen> {
         1 => i.clone().prop_map(|item| Gen::Detach { item }),
         1 => (i.clone(), 1i64..10).prop_map(|(item, secs)| Gen::Duration { item, secs }),
         1 => (0usize..6, any::<bool>()).prop_map(|(track, on)| Gen::Lock { track, on }),
+        2 => (i.clone(), 0i64..8, 0i64..8, any::<u8>(), any::<u8>())
+            .prop_map(|(item, fade_in, fade_out, scale, opacity)| Gen::Look { item, fade_in, fade_out, scale, opacity }),
+        1 => (i.clone(), any::<u8>()).prop_map(|(item, shade)| Gen::Fill { item, shade }),
         2 => Just(Gen::Undo),
         1 => Just(Gen::Redo),
     ]
@@ -602,10 +616,17 @@ fn op_for(g: &Gen, p: &Project) -> Option<TimelineOp> {
             new_track,
             at,
         } => {
-            let m = &p.media[*media];
+            // Index 3 is a generated background clip.
+            let (kind, item) = match p.media.get(*media) {
+                Some(m) => (track_kind_for(m.kind()), Item::new(m, Time::ZERO)),
+                None => (
+                    TrackKind::Video,
+                    Item::generated(Generated::Solid { color: Rgba::BLACK }, Time::ZERO),
+                ),
+            };
             let placement = if *new_track {
                 Placement::NewTrack {
-                    kind: track_kind_for(m.kind()),
+                    kind,
                     index: tn % (p.tracks.len() + 1),
                 }
             } else {
@@ -614,7 +635,7 @@ fn op_for(g: &Gen, p: &Project) -> Option<TimelineOp> {
             TimelineOp::Insert {
                 placement,
                 at: S(*at),
-                items: vec![Item::new(m, Time::ZERO)],
+                items: vec![item],
             }
         }
         Gen::Move {
@@ -668,6 +689,32 @@ fn op_for(g: &Gen, p: &Project) -> Option<TimelineOp> {
             track: track(*tn)?,
             change: TrackChange::Locked(*on),
         },
+        Gen::Look {
+            item: n,
+            fade_in,
+            fade_out,
+            scale,
+            opacity,
+        } => TimelineOp::Look {
+            items: vec![item(*n)?],
+            patch: LookPatch {
+                transform: Some(Transform {
+                    size: [f32::from(*scale) / 64.0; 2],
+                    rotation: f32::from(*scale) * 3.0,
+                    ..Transform::default()
+                }),
+                opacity: Some(f32::from(*opacity) / 200.0),
+                fade_in: Some(S(*fade_in)),
+                fade_out: Some(S(*fade_out)),
+                ..LookPatch::default()
+            },
+        },
+        Gen::Fill { item: n, shade } => TimelineOp::SetFill {
+            items: vec![item(*n)?],
+            fill: Generated::Solid {
+                color: Rgba([*shade, *shade, *shade, 255]),
+            },
+        },
         Gen::Undo | Gen::Redo => return None,
     })
 }
@@ -718,7 +765,9 @@ proptest! {
                 return Err(TestCaseError::fail(format!("{e} after {g:?}\n{:#?}", p.tracks)));
             }
             for item in p.items() {
-                let m = p.media(item.media().unwrap()).unwrap();
+                prop_assert!(item.look.fade_in + item.look.fade_out <= item.duration, "fades overflow: {item:?}");
+                prop_assert!((0.0..=1.0).contains(&item.look.opacity));
+                let Some(m) = item.media().and_then(|id| p.media(id)) else { continue };
                 if let Some(max) = max_duration(m, Time::ZERO) {
                     prop_assert!(item.source_in + item.duration <= max, "item runs past its source: {item:?}");
                 }
@@ -727,4 +776,112 @@ proptest! {
         while h.undo(&mut p).is_some() {}
         prop_assert_eq!(&p, &start);
     }
+}
+
+#[test]
+fn split_keeps_fades_on_outer_pieces_and_backgrounds_resize() {
+    let mut p = fixture();
+    let mut h = History::new();
+    let mp = Placement::Track(main_id(&p));
+    let bg = Item::generated(Generated::Solid { color: Rgba::BLACK }, Time::ZERO);
+    let id = bg.id;
+    run(
+        &mut p,
+        &mut h,
+        TimelineOp::Insert {
+            placement: mp,
+            at: S(0),
+            items: vec![bg],
+        },
+    )
+    .unwrap();
+    run(
+        &mut p,
+        &mut h,
+        TimelineOp::SetDuration {
+            items: vec![id],
+            duration: S(20),
+        },
+    )
+    .unwrap();
+    run(
+        &mut p,
+        &mut h,
+        TimelineOp::Look {
+            items: vec![id],
+            patch: LookPatch {
+                fade_in: Some(S(2)),
+                fade_out: Some(S(3)),
+                ..LookPatch::default()
+            },
+        },
+    )
+    .unwrap();
+    run(
+        &mut p,
+        &mut h,
+        TimelineOp::Split {
+            at: S(10),
+            items: vec![],
+        },
+    )
+    .unwrap();
+    let main = p.main_track().unwrap();
+    assert_eq!(
+        (main.items[0].look.fade_in, main.items[0].look.fade_out),
+        (S(2), Time::ZERO)
+    );
+    assert_eq!(
+        (main.items[1].look.fade_in, main.items[1].look.fade_out),
+        (Time::ZERO, S(3))
+    );
+    // Trimming shorter than the fade shrinks the fade.
+    let right = main.items[1].id;
+    run(
+        &mut p,
+        &mut h,
+        TimelineOp::Trim {
+            item: right,
+            edge: Edge::End,
+            to: S(11),
+            ripple: false,
+        },
+    )
+    .unwrap();
+    assert_eq!(p.find_item(right).unwrap().1.look.fade_out, S(1));
+    // Recolour.
+    run(
+        &mut p,
+        &mut h,
+        TimelineOp::SetFill {
+            items: vec![right],
+            fill: Generated::Solid {
+                color: Rgba([255, 0, 0, 255]),
+            },
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        p.find_item(right).unwrap().1.generated_fill(),
+        Some(Generated::Solid {
+            color: Rgba([255, 0, 0, 255])
+        })
+    ));
+    // Backgrounds can't go on audio tracks.
+    let bg2 = Item::generated(Generated::Solid { color: Rgba::BLACK }, Time::ZERO);
+    assert!(
+        run(
+            &mut p,
+            &mut h,
+            TimelineOp::Insert {
+                placement: Placement::NewTrack {
+                    kind: TrackKind::Audio,
+                    index: 9
+                },
+                at: S(0),
+                items: vec![bg2]
+            }
+        )
+        .is_err()
+    );
 }

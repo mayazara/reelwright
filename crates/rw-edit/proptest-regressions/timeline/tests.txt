@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6d48f50fcad3c4f2037584dda3ff889c902ced3916d0f2df2f5feeb74970ce76 # shrinks to gens = [Insert { media: 3, track: 0, new_track: false, at: 0 }]

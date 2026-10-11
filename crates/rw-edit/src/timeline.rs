@@ -17,8 +17,8 @@
 
 use crate::{Command, EditError};
 use rw_model::{
-    GroupId, Item, ItemId, MAX_GAIN, MediaKind, MediaRef, Project, Time, Track, TrackId, TrackKind,
-    max_duration,
+    BlendMode, ColorAdjust, Crop, Filter, Generated, GroupId, Item, ItemId, Look, MAX_GAIN,
+    MediaKind, MediaRef, Project, Time, Track, TrackId, TrackKind, Transform, max_duration,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -117,6 +117,63 @@ pub enum TimelineOp {
         track: TrackId,
         change: TrackChange,
     },
+    /// Changes how clips look; `None` fields are left alone.
+    Look {
+        items: Vec<ItemId>,
+        patch: LookPatch,
+    },
+    /// Changes the colour or gradient of background clips.
+    SetFill {
+        items: Vec<ItemId>,
+        fill: Generated,
+    },
+}
+
+/// A partial change to [`Look`]; applied field by field.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LookPatch {
+    pub transform: Option<Transform>,
+    pub crop: Option<Crop>,
+    pub opacity: Option<f32>,
+    pub blend: Option<BlendMode>,
+    pub color: Option<ColorAdjust>,
+    /// `Some(None)` removes the filter.
+    pub filter: Option<Option<Filter>>,
+    pub fade_in: Option<Time>,
+    pub fade_out: Option<Time>,
+}
+
+impl LookPatch {
+    pub fn apply(&self, look: &mut Look) {
+        if let Some(v) = self.transform {
+            look.transform = v;
+        }
+        if let Some(v) = self.crop {
+            look.crop = v;
+        }
+        if let Some(v) = self.opacity {
+            look.opacity = v;
+        }
+        if let Some(v) = self.blend {
+            look.blend = v;
+        }
+        if let Some(v) = self.color {
+            look.color = v;
+        }
+        if let Some(v) = &self.filter {
+            look.filter = v.clone();
+        }
+        if let Some(v) = self.fade_in {
+            look.fade_in = v;
+        }
+        if let Some(v) = self.fade_out {
+            look.fade_out = v;
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        *self == LookPatch::default()
+    }
 }
 
 impl TimelineOp {
@@ -138,6 +195,24 @@ impl TimelineOp {
             TimelineOp::SetMuted { muted: true, .. } => "Mute".into(),
             TimelineOp::SetMuted { .. } => "Unmute".into(),
             TimelineOp::SetDuration { .. } => "Change duration".into(),
+            TimelineOp::Look { patch, .. } => {
+                if patch.transform.is_some() {
+                    "Transform".into()
+                } else if patch.crop.is_some() {
+                    "Crop".into()
+                } else if patch.color.is_some() {
+                    "Adjust colour".into()
+                } else if patch.filter.is_some() {
+                    "Filter".into()
+                } else if patch.fade_in.is_some() || patch.fade_out.is_some() {
+                    "Fade".into()
+                } else if patch.blend.is_some() || patch.opacity.is_some() {
+                    "Blending".into()
+                } else {
+                    "Change look".into()
+                }
+            }
+            TimelineOp::SetFill { .. } => "Change background".into(),
             TimelineOp::SetTrack { change, .. } => match change {
                 TrackChange::Locked(true) => "Lock track",
                 TrackChange::Locked(false) => "Unlock track",
@@ -290,11 +365,13 @@ fn require_some(ids: Vec<ItemId>) -> Result<Vec<ItemId>, EditError> {
 }
 
 /// Whether an item may sit on a track of `kind`.
-fn fits(media: Option<&MediaRef>, kind: TrackKind) -> bool {
-    match media.map(MediaRef::kind) {
-        Some(MediaKind::Audio) => kind == TrackKind::Audio,
-        Some(_) => matches!(kind, TrackKind::Video | TrackKind::Overlay),
-        None => false,
+fn fits(item: &Item, media: Option<&MediaRef>, kind: TrackKind) -> bool {
+    let visual = matches!(kind, TrackKind::Video | TrackKind::Overlay);
+    match (item.generated_fill(), media.map(MediaRef::kind)) {
+        (Some(_), _) => visual,
+        (None, Some(MediaKind::Audio)) => kind == TrackKind::Audio,
+        (None, Some(_)) => visual,
+        (None, None) => false,
     }
 }
 
@@ -336,7 +413,7 @@ impl Ctx<'_> {
             return Err(EditError::Invalid("the track is locked".into()));
         }
         for item in items {
-            if !fits(self.media(item), track.kind) {
+            if !fits(item, self.media(item), track.kind) {
                 return Err(EditError::Invalid(
                     "that kind of clip can't go on this track".into(),
                 ));
@@ -522,6 +599,9 @@ impl Ctx<'_> {
                     right.group = it
                         .group
                         .map(|g| *new_groups.entry(g).or_insert_with(|| self.ids.group()));
+                    // The fade-in stays on the left piece, the fade-out on the right.
+                    right.look.fade_in = Time::ZERO;
+                    tracks[t].items[i].look.fade_out = Time::ZERO;
                     tracks[t].items[i].duration = left;
                     tracks[t].items.insert(i + 1, right);
                 }
@@ -670,18 +750,58 @@ impl Ctx<'_> {
                 let mut any = false;
                 for id in ids {
                     let (t, i) = locate(tracks, id).ok_or(EditError::NotFound("item"))?;
-                    let is_image = self
-                        .media(&tracks[t].items[i])
-                        .is_some_and(|m| m.kind() == MediaKind::Image);
-                    if is_image {
+                    let it = &tracks[t].items[i];
+                    let free_length = it.generated_fill().is_some()
+                        || self.media(it).is_some_and(|m| m.kind() == MediaKind::Image);
+                    if free_length {
                         tracks[t].items[i].duration = (*duration).max(self.min);
                         any = true;
                     }
                 }
                 if !any {
                     return Err(EditError::Invalid(
-                        "only still images have a set duration".into(),
+                        "only still images and backgrounds have a set duration".into(),
                     ));
+                }
+            }
+
+            TimelineOp::Look { items, patch } => {
+                // Looks are per clip: group mates are not changed.
+                let mut any = false;
+                for id in items {
+                    let (t, i) = locate(tracks, *id).ok_or(EditError::NotFound("item"))?;
+                    if tracks[t].locked
+                        || tracks[t].kind == TrackKind::Audio
+                            && patch.fade_in.is_none()
+                            && patch.fade_out.is_none()
+                    {
+                        continue;
+                    }
+                    let item = &mut tracks[t].items[i];
+                    patch.apply(&mut item.look);
+                    item.look = item.look.clone().sanitized(item.duration);
+                    any = true;
+                }
+                if !any {
+                    return Err(EditError::Invalid("nothing to change".into()));
+                }
+            }
+
+            TimelineOp::SetFill { items, fill } => {
+                let mut any = false;
+                for id in items {
+                    let (t, i) = locate(tracks, *id).ok_or(EditError::NotFound("item"))?;
+                    if tracks[t].locked {
+                        continue;
+                    }
+                    let item = &mut tracks[t].items[i];
+                    if item.generated_fill().is_some() {
+                        item.kind = rw_model::ItemKind::Generated { fill: *fill };
+                        any = true;
+                    }
+                }
+                if !any {
+                    return Err(EditError::Invalid("select a background clip".into()));
                 }
             }
 
@@ -714,6 +834,14 @@ fn normalize_with(tracks: &mut Vec<Track>, new_track_id: &mut dyn FnMut() -> Tra
             t.main = false;
         }
         seen_main |= t.main;
+    }
+    // Fades must fit the (possibly trimmed) clip.
+    for track in tracks.iter_mut() {
+        for item in &mut track.items {
+            if !item.look.is_default() {
+                item.look = item.look.clone().sanitized(item.duration);
+            }
+        }
     }
     let mut t = 0;
     while t < tracks.len() {

@@ -9,6 +9,7 @@ pub mod library;
 pub mod media;
 pub mod project;
 pub mod time;
+pub mod visual;
 
 pub use ids::{GroupId, ItemId, MarkerId, MediaId, ProjectId, TrackId};
 pub use media::{AudioInfo, ContentHash, MediaInfo, MediaKind, MediaRef, VideoInfo};
@@ -17,6 +18,9 @@ pub use project::{
     TrackKind, default_duration, max_duration, track_kind_for,
 };
 pub use time::{FrameRate, TICKS_PER_SECOND, Time};
+pub use visual::{
+    BlendMode, ColorAdjust, ColorControl, Crop, Filter, Fit, Generated, Layout, Look, Transform,
+};
 
 /// Product identity. The name is a placeholder; changing it here renames the app.
 pub mod app {
