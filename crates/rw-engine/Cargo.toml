@@ -16,6 +16,7 @@ rw-audio.workspace = true
 crossbeam-channel.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
+ringbuf.workspace = true
 
 [dev-dependencies]
 rw-edit.workspace = true

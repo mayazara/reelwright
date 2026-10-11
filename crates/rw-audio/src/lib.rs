@@ -1,8 +1,10 @@
 //! Mixer, fades, gain, speed/time-stretch, meters and audio output.
 //!
-//! M2 provides the timeline mixer used by both playback and export.
+//! M2 provides the timeline mixer used by both playback and export, and
+//! audio outputs that drive the playback clock.
 
 mod mixer;
+pub mod output;
 
 pub use mixer::{Mixer, audible_items};
 pub use rw_media::decode::{CHANNELS, SAMPLE_RATE};

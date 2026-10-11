@@ -7,5 +7,6 @@ pub mod export;
 pub mod frames;
 pub mod import;
 pub mod jobs;
+pub mod playback;
 
 pub use jobs::{MediaEvent, MediaJobs, Waker};

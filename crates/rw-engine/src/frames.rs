@@ -1,11 +1,12 @@
 //! Evaluates the timeline at a time into compositor layers.
 
 use rw_cache::ProjectCache;
-use rw_media::VideoReader;
+use rw_media::{VideoFrame, VideoReader};
 use rw_model::{Item, ItemId, MediaKind, MediaRef, Project, Time, TrackKind};
 use rw_render::{Layer, fit_contain};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Readers idle for this many calls are closed.
@@ -38,12 +39,31 @@ pub fn decode_size(media: &MediaRef, out: (u32, u32)) -> (u32, u32) {
     }
 }
 
+/// Clips starting this soon get their decoder opened early, so a cut never
+/// waits on opening a file.
+pub const PREWARM: Time = Time::from_secs(1);
+
 struct Entry {
     reader: Option<VideoReader>,
+    /// Whether opening was attempted (a failed open stays `None`).
+    opened: bool,
     last_used: u64,
 }
 
+/// One decode to run: either a layer for this frame or a warm-up.
+struct Want {
+    /// Position among this frame's layers; `None` for a warm-up.
+    slot: Option<usize>,
+    item: ItemId,
+    path: PathBuf,
+    still: bool,
+    size: (u32, u32),
+    source_t: Time,
+    rotation: u16,
+}
+
 /// Opens and caches one reader per item and returns its picture at a time.
+/// The layers of a frame are decoded in parallel.
 pub struct FrameSource {
     cache: ProjectCache,
     prefer_proxies: bool,
@@ -59,6 +79,27 @@ impl std::fmt::Debug for FrameSource {
     }
 }
 
+fn decode(entry: &mut Entry, w: &Want) -> Option<Arc<VideoFrame>> {
+    if !entry.opened {
+        entry.opened = true;
+        entry.reader = VideoReader::open(&w.path, Some(w.size), w.still)
+            .inspect_err(
+                |e| tracing::warn!(path = %w.path.display(), error = %e, "can't open video"),
+            )
+            .ok();
+    }
+    let reader = entry.reader.as_mut()?;
+    reader.set_out_size(w.size);
+    match reader.frame_at(w.source_t) {
+        Ok(f) => Some(f),
+        Err(e) => {
+            tracing::warn!(error = %e, "decode failed");
+            entry.reader = None;
+            None
+        }
+    }
+}
+
 impl FrameSource {
     /// `prefer_proxies` decodes preview proxies where they exist (preview);
     /// export always reads the original files.
@@ -71,70 +112,114 @@ impl FrameSource {
         }
     }
 
-    fn open(&self, media: &MediaRef, size: (u32, u32)) -> Option<VideoReader> {
-        let still = media.kind() == MediaKind::Image;
+    fn want(
+        &self,
+        slot: Option<usize>,
+        item: &Item,
+        media: &MediaRef,
+        source_t: Time,
+        out: (u32, u32),
+    ) -> Want {
         let proxy = self.cache.proxy(&media.hash);
         let path = if self.prefer_proxies && proxy.exists() {
             proxy
         } else {
             media.path.clone()
         };
-        VideoReader::open(&path, Some(size), still)
-            .inspect_err(|e| tracing::warn!(path = %path.display(), error = %e, "can't open video"))
-            .ok()
+        Want {
+            slot,
+            item: item.id,
+            path,
+            still: media.kind() == MediaKind::Image,
+            size: decode_size(media, out),
+            source_t,
+            rotation: media.info.video.as_ref().map_or(0, |v| v.rotation),
+        }
     }
 
     /// Layers to composite at timeline time `t` into an output of `out`.
     pub fn layers_at(&mut self, project: &Project, t: Time, out: (u32, u32)) -> Vec<Layer> {
         self.calls += 1;
-        let mut layers = Vec::new();
-        for item in visible_items(project, t) {
-            let Some(media) = item.media().and_then(|id| project.media(id)) else {
-                continue;
-            };
-            if media.info.video.is_none() {
-                continue;
+        let media_of = |item: &Item| {
+            item.media()
+                .and_then(|id| project.media(id))
+                .filter(|m| m.info.video.is_some())
+        };
+        let mut wants = Vec::new();
+        for (slot, item) in visible_items(project, t).into_iter().enumerate() {
+            if let Some(m) = media_of(item) {
+                wants.push(self.want(Some(slot), item, m, item.source_time(t), out));
             }
-            let size = decode_size(media, out);
-            let calls = self.calls;
-            let needs_open = !self.readers.contains_key(&item.id);
-            if needs_open {
-                let reader = self.open(media, size);
-                self.readers.insert(
-                    item.id,
-                    Entry {
-                        reader,
-                        last_used: calls,
-                    },
-                );
-            }
-            let entry = self.readers.get_mut(&item.id).expect("inserted above");
-            entry.last_used = calls;
-            let Some(reader) = entry.reader.as_mut() else {
-                continue;
-            };
-            reader.set_out_size(size);
-            let frame = match reader.frame_at(item.source_time(t)) {
-                Ok(f) => f,
-                Err(e) => {
-                    tracing::warn!(error = %e, "decode failed");
-                    entry.reader = None;
-                    continue;
-                }
-            };
-            let mut h = std::collections::hash_map::DefaultHasher::new();
-            (item.id, frame.pts, size).hash(&mut h);
-            let rotation = media.info.video.as_ref().map_or(0, |v| v.rotation);
-            layers.push(Layer {
-                image: Arc::new(frame.image.clone()),
-                key: h.finish(),
-                rotation,
-                opacity: 1.0,
-            });
         }
+        for track in project
+            .tracks
+            .iter()
+            .filter(|tr| matches!(tr.kind, TrackKind::Video | TrackKind::Overlay) && !tr.hidden)
+        {
+            for item in track
+                .items
+                .iter()
+                .filter(|i| i.start > t && i.start <= t + PREWARM)
+            {
+                if let Some(m) = media_of(item)
+                    && self.readers.get(&item.id).is_none_or(|e| !e.opened)
+                {
+                    wants.push(self.want(None, item, m, item.source_in, out));
+                }
+            }
+        }
+
         let calls = self.calls;
+        for w in &wants {
+            self.readers
+                .entry(w.item)
+                .or_insert(Entry {
+                    reader: None,
+                    opened: false,
+                    last_used: calls,
+                })
+                .last_used = calls;
+        }
+        // Pair each want with its entry (distinct items, so distinct &muts).
+        let mut by_item: HashMap<ItemId, &Want> = wants.iter().map(|w| (w.item, w)).collect();
+        let jobs: Vec<(&mut Entry, &Want)> = self
+            .readers
+            .iter_mut()
+            .filter_map(|(id, e)| by_item.remove(id).map(|w| (e, w)))
+            .collect();
+
+        let results: Vec<(&Want, Option<Arc<VideoFrame>>)> = if jobs.len() <= 1 {
+            jobs.into_iter().map(|(e, w)| (w, decode(e, w))).collect()
+        } else {
+            std::thread::scope(|s| {
+                let handles: Vec<_> = jobs
+                    .into_iter()
+                    .map(|(e, w)| s.spawn(move || (w, decode(e, w))))
+                    .collect();
+                handles.into_iter().filter_map(|h| h.join().ok()).collect()
+            })
+        };
+
+        let mut layers: Vec<(usize, Layer)> = results
+            .into_iter()
+            .filter_map(|(w, frame)| {
+                let (slot, frame) = (w.slot?, frame?);
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                (w.item, frame.pts, w.size).hash(&mut h);
+                Some((
+                    slot,
+                    Layer {
+                        image: Arc::new(frame.image.clone()),
+                        key: h.finish(),
+                        rotation: w.rotation,
+                        opacity: 1.0,
+                    },
+                ))
+            })
+            .collect();
+        layers.sort_by_key(|(slot, _)| *slot);
         self.readers.retain(|_, e| calls - e.last_used < IDLE_CALLS);
-        layers
+        layers.into_iter().map(|(_, l)| l).collect()
     }
 
     /// Drops all readers (e.g. when proxies become available).

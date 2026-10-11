@@ -70,6 +70,12 @@ pub struct VideoReader {
     fresh: bool,
 }
 
+// SAFETY: FFmpeg's demuxer, decoder and scaler contexts have no thread
+// affinity; they only require that one thread uses them at a time, which
+// `&mut self` on every method guarantees. The raw pointers inside the
+// wrappers are what make the type `!Send` by default.
+unsafe impl Send for VideoReader {}
+
 impl std::fmt::Debug for VideoReader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VideoReader")
@@ -372,6 +378,10 @@ pub struct AudioReader {
     skip_until: Option<Time>,
     eof: bool,
 }
+
+// SAFETY: as for `VideoReader`: exclusive access via `&mut self`, and the
+// demuxer, decoder and resampler contexts are not tied to a thread.
+unsafe impl Send for AudioReader {}
 
 impl std::fmt::Debug for AudioReader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -47,6 +47,7 @@ proptest = "=1.12.0"
 tempfile = "=3.27.0"
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "vulkan", "metal", "dx12", "gles"] }
 pollster = "=1.0.1"
+ringbuf = "=0.4.8"
 bytemuck = { version = "=1.25.2", features = ["derive"] }
 
 [workspace.lints.rust]

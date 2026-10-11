@@ -11,6 +11,7 @@ publish.workspace = true
 rw-model.workspace = true
 rw-media.workspace = true
 tracing.workspace = true
+ringbuf.workspace = true
 
 [lints]
 workspace = true
