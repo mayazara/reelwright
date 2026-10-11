@@ -321,12 +321,14 @@ mod tests {
         assert_eq!(decode_size(&v, (1920, 1080), &pip), (480, 270));
         // Keeping the middle half fills the frame from half the pixels: the
         // whole frame decodes at twice the output size.
-        let mut cropped = Look::default();
-        cropped.crop = rw_model::Crop {
-            left: 0.25,
-            right: 0.25,
-            top: 0.25,
-            bottom: 0.25,
+        let cropped = Look {
+            crop: rw_model::Crop {
+                left: 0.25,
+                right: 0.25,
+                top: 0.25,
+                bottom: 0.25,
+            },
+            ..Look::default()
         };
         assert_eq!(decode_size(&v, (1920, 1080), &cropped), (3840, 2160));
     }
