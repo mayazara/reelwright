@@ -26,6 +26,10 @@ Every third-party crate used directly by a workspace member, pinned with `=x.y.z
 | crossbeam-channel | 0.5.17 | MIT OR Apache-2.0 | rw-engine | Job queues and result channels | M1 |
 | proptest | 1.12.0 | MIT OR Apache-2.0 | rw-model, rw-edit (dev) | Property tests for time maths and undo/redo | M1 |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 | several (dev) | Temporary folders in tests | M1 |
+| wgpu | 30.0.1 | MIT OR Apache-2.0 | rw-render (same version egui-wgpu uses) | GPU compositor, headless export device | M2 |
+| pollster | 1.0.1 | Apache-2.0 OR MIT | rw-render | Blocking on wgpu adapter/device futures | M2 |
+| bytemuck | 1.25.2 | Zlib OR Apache-2.0 OR MIT | rw-render | Uniform buffer layout | M2 |
+| ringbuf | 0.4.8 | MIT OR Apache-2.0 | rw-audio, rw-engine | Lock-free audio ring between mixer and output | M2 |
 
 ## Native libraries
 

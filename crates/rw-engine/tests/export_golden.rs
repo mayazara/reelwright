@@ -16,7 +16,7 @@ use std::sync::atomic::AtomicBool;
 fn gpu() -> Option<Gpu> {
     match Gpu::headless() {
         Ok(g) => Some(g),
-        Err(e) if std::env::var_os("RW_REQUIRE_GPU").is_some() => panic!("{e}"),
+        Err(e) if std::env::var("RW_REQUIRE_GPU").is_ok_and(|v| v == "1") => panic!("{e}"),
         Err(e) => {
             eprintln!("skipping: {e}");
             None
