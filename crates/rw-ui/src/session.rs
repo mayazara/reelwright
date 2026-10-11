@@ -58,6 +58,13 @@ pub struct Session {
     pub revision: u64,
     /// Pixel size the preview panel last asked for.
     pub(crate) preview_size: (u32, u32),
+    /// A look change being dragged (slider, handle) but not yet committed;
+    /// the preview shows it, the project and history don't have it yet.
+    pub preview_patch: Option<(Vec<ItemId>, rw_edit::timeline::LookPatch)>,
+    /// A background colour being dragged, likewise uncommitted.
+    pub preview_fill: Option<(Vec<ItemId>, rw_model::Generated)>,
+    /// On-canvas handles and crop mode.
+    pub canvas_tools: crate::canvas_tools::CanvasState,
     pub thumbs: HashMap<ContentHash, JobState>,
     pub proxies: HashMap<ContentHash, JobState>,
     pub peaks: HashMap<ContentHash, JobState>,
@@ -90,6 +97,9 @@ impl Session {
             strips: StripCache::default(),
             revision: 0,
             preview_size: (project.canvas.width / 2, project.canvas.height / 2),
+            preview_patch: None,
+            preview_fill: None,
+            canvas_tools: Default::default(),
             dir,
             project,
             last_seen_state: history.state(),
@@ -121,8 +131,52 @@ impl Session {
         Ok(s)
     }
 
+    /// Shows an uncommitted look change in the preview.
+    pub fn set_preview_patch(&mut self, items: Vec<ItemId>, patch: rw_edit::timeline::LookPatch) {
+        self.preview_patch = Some((items, patch));
+        self.revision += 1;
+    }
+
+    pub fn set_preview_fill(&mut self, items: Vec<ItemId>, fill: rw_model::Generated) {
+        self.preview_fill = Some((items, fill));
+        self.revision += 1;
+    }
+
+    pub fn clear_preview_patch(&mut self) {
+        let had = self.preview_patch.take().is_some() | self.preview_fill.take().is_some();
+        if had {
+            self.revision += 1;
+        }
+    }
+
+    /// The project as the preview should show it (with any uncommitted
+    /// look change applied).
+    pub fn preview_project(&self) -> std::borrow::Cow<'_, Project> {
+        if self.preview_patch.is_none() && self.preview_fill.is_none() {
+            return std::borrow::Cow::Borrowed(&self.project);
+        }
+        let mut p = self.project.clone();
+        for item in p.tracks.iter_mut().flat_map(|t| t.items.iter_mut()) {
+            if let Some((ids, patch)) = &self.preview_patch
+                && ids.contains(&item.id)
+            {
+                patch.apply(&mut item.look);
+                item.look = item.look.clone().sanitized(item.duration);
+            }
+            if let Some((ids, fill)) = &self.preview_fill
+                && ids.contains(&item.id)
+                && item.generated_fill().is_some()
+            {
+                item.kind = rw_model::ItemKind::Generated { fill: *fill };
+            }
+        }
+        std::borrow::Cow::Owned(p)
+    }
+
     /// Call after any change to `project`: refreshes playback and preview.
     pub fn changed(&mut self) {
+        self.preview_patch = None;
+        self.preview_fill = None;
         self.revision += 1;
         self.player.set_project(Arc::new(self.project.clone()));
         let live: HashSet<ItemId> = self.project.items().map(|i| i.id).collect();

@@ -4,7 +4,7 @@
 
 use crate::timeline::logic::DropRow;
 use rw_edit::timeline::TimelineOp;
-use rw_model::{MarkerId, MediaId, Time};
+use rw_model::{Generated, MarkerId, MediaId, Time};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EditorAction {
@@ -37,6 +37,13 @@ pub enum EditorAction {
     AppendMedia(MediaId),
     Export,
     AddMarker,
+    /// Add a colour/gradient clip at the playhead on the main track.
+    AppendGenerated(Generated),
+    InsertGenerated {
+        fill: Generated,
+        row: DropRow,
+        at: Time,
+    },
     RemoveMarker(MarkerId),
     MoveMarker(MarkerId, Time),
 }

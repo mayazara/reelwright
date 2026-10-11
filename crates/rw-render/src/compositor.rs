@@ -100,21 +100,20 @@ fn rgba_f(c: Rgba) -> [f32; 4] {
 }
 
 /// Geometry and shading parameters for one layer in an output of `out`.
-pub(crate) fn layer_uniform(
-    layer: &Layer,
+/// Size in output pixels at which a source of `display` size (before
+/// cropping) is drawn with `look`. Generated fills always fill their box.
+/// The UI uses this to place on-canvas handles exactly over the picture.
+pub fn content_size(
+    display: (f32, f32),
+    look: &Look,
     out: (u32, u32),
-    lut_size: Option<usize>,
-) -> LayerUniform {
-    let look = &layer.look;
+    generated: bool,
+) -> (f32, f32) {
     let t = look.transform;
-    let (ow, oh) = (out.0 as f32, out.1 as f32);
-    let (dw, dh) = layer.display_size(out);
     let (kx, ky) = look.crop.kept();
-    let (cw, ch) = ((dw * kx).max(1e-3), (dh * ky).max(1e-3));
-    let (bw, bh) = (t.size[0] * ow, t.size[1] * oh);
-    let generated = !matches!(layer.source, Source::Image(_));
-    let fit = if generated { Fit::Stretch } else { t.fit };
-    let content = match fit {
+    let (cw, ch) = ((display.0 * kx).max(1e-3), (display.1 * ky).max(1e-3));
+    let (bw, bh) = (t.size[0] * out.0 as f32, t.size[1] * out.1 as f32);
+    match if generated { Fit::Stretch } else { t.fit } {
         Fit::Contain => {
             let s = (bw / cw).min(bh / ch);
             (cw * s, ch * s)
@@ -124,7 +123,22 @@ pub(crate) fn layer_uniform(
             (cw * s, ch * s)
         }
         Fit::Stretch => (bw, bh),
-    };
+    }
+}
+
+pub(crate) fn layer_uniform(
+    layer: &Layer,
+    out: (u32, u32),
+    lut_size: Option<usize>,
+) -> LayerUniform {
+    let look = &layer.look;
+    let t = look.transform;
+    let (ow, oh) = (out.0 as f32, out.1 as f32);
+    let (kx, ky) = look.crop.kept();
+    let (bw, bh) = (t.size[0] * ow, t.size[1] * oh);
+    let generated = !matches!(layer.source, Source::Image(_));
+    let fit = if generated { Fit::Stretch } else { t.fit };
+    let content = content_size(layer.display_size(out), look, out, generated);
     let theta = t.rotation.to_radians();
     let c = look.color;
     let (kind, fill0, fill1, grad) = match &layer.source {

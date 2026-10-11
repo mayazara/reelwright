@@ -988,6 +988,20 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 StrokeKind::Inside,
             );
         }
+        if let Some(fill) = body_resp.dnd_release_payload::<rw_model::Generated>() {
+            let row = logic::drop_row(
+                project,
+                &rows,
+                p.y - tracks.top() + state.scroll_y,
+                TrackKind::Video,
+            );
+            let at = drop_time(project, time_at(p.x), snap_on, snap_threshold, ctx.playhead);
+            out.push(EditorAction::InsertGenerated {
+                fill: *fill,
+                row,
+                at,
+            });
+        }
         if let Some(media) = body_resp.dnd_release_payload::<MediaId>()
             && let Some(m) = project.media(*media)
         {
@@ -1127,6 +1141,11 @@ fn draw_item(
     let inner = r.shrink(2.0);
     let visible = clip.clip_rect();
 
+    if let Some(fill) = item.generated_fill() {
+        let strip = Rect::from_min_max(pos2(inner.left(), inner.top() + 14.0), inner.max);
+        crate::backgrounds::paint(&clip, strip, fill);
+    }
+
     // Pictures along visual clips: filmstrip tiles for the source time at
     // each position, or the single thumbnail until the filmstrip is ready.
     if !audio_row && let Some(m) = media.filter(|m| m.kind() != MediaKind::Audio) {
@@ -1217,7 +1236,12 @@ fn draw_item(
         Stroke::new(1.0, base.gamma_multiply(0.8))
     };
     clip.rect_stroke(r, CornerRadius::same(4), stroke, StrokeKind::Inside);
-    let mut label = media.map_or_else(|| "Missing media".to_owned(), |m| m.name.clone());
+    let mut label = match (item.generated_fill(), media) {
+        (Some(rw_model::Generated::Solid { .. }), _) => "Colour".to_owned(),
+        (Some(rw_model::Generated::Gradient { .. }), _) => "Gradient".to_owned(),
+        (None, Some(m)) => m.name.clone(),
+        (None, None) => "Missing media".to_owned(),
+    };
     if item.muted {
         label.push_str("  (muted)");
     }

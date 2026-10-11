@@ -1,6 +1,8 @@
 //! egui app: panels, timeline widget, preview, property inspector, dialogs.
 
 pub mod actions;
+pub mod backgrounds;
+pub mod canvas_tools;
 mod editing;
 pub mod format;
 pub mod home;
@@ -311,6 +313,11 @@ impl EditorUi {
             BinAction::Rename(id, name) => {
                 if let Some(s) = self.session.as_mut() {
                     let _ = s.execute(Box::new(RenameMedia::new(id, name)));
+                }
+            }
+            BinAction::AddGenerated(fill) => {
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::AppendGenerated(fill));
                 }
             }
             BinAction::AddToTimeline(id) => {

@@ -276,6 +276,29 @@ impl Session {
                 }
             }
             EditorAction::AppendMedia(media) => self.append_media(media),
+            EditorAction::AppendGenerated(fill) => {
+                let row = match self.project.tracks.iter().position(|t| t.main) {
+                    Some(i) => DropRow::Track(i),
+                    None => DropRow::New {
+                        kind: TrackKind::Video,
+                        index: 0,
+                    },
+                };
+                let at = self.playhead();
+                self.apply(EditorAction::InsertGenerated { fill, row, at });
+            }
+            EditorAction::InsertGenerated { fill, row, at } => {
+                let item = Item::generated(fill, Time::ZERO);
+                let id = item.id;
+                let placement = placement(&self.project, row);
+                if self.op(TimelineOp::Insert {
+                    placement,
+                    at,
+                    items: vec![item],
+                }) {
+                    self.selection = [id].into_iter().collect();
+                }
+            }
             // Export is run by the UI, which owns the GPU and dialogs.
             EditorAction::Export => {}
             EditorAction::AddMarker => {

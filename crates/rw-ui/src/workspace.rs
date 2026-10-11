@@ -83,21 +83,25 @@ fn preview_panel(ui: &mut egui::Ui, s: &mut Session, tokens: Tokens, out: &mut V
     s.preview_size = size;
     let playing = s.player.is_playing();
     let playhead = s.playhead();
-    if let Some(pv) = s.preview.as_mut() {
+    // Where the canvas sits on screen (with a small margin).
+    let (_, _, w, h) = rw_render::fit_contain(
+        (canvas.width, canvas.height),
+        (area.width() as u32, area.height() as u32),
+    );
+    let img = egui::Rect::from_center_size(area.center(), egui::vec2(w, h) * 0.97);
+    // Taken out while rendering so the session can be read alongside.
+    let mut preview = s.preview.take();
+    if let Some(pv) = preview.as_mut() {
         if playing {
             if let Some(frame) = s.player.take_frame() {
                 pv.show_layers(&s.project, &frame.layers, size);
             }
             ui.ctx().request_repaint();
         } else {
-            pv.show_paused(&s.project, playhead, s.revision, size);
+            let shown = s.preview_project();
+            pv.show_paused(&shown, playhead, s.revision, size);
         }
         if let Some(tex) = pv.texture() {
-            let (_, _, w, h) = rw_render::fit_contain(
-                (canvas.width, canvas.height),
-                (area.width() as u32, area.height() as u32),
-            );
-            let img = egui::Rect::from_center_size(area.center(), egui::vec2(w, h) * 0.97);
             ui.painter().image(
                 tex,
                 img,
@@ -106,6 +110,12 @@ fn preview_panel(ui: &mut egui::Ui, s: &mut Session, tokens: Tokens, out: &mut V
             );
         }
     }
+    s.preview = preview;
+    let mut tools = std::mem::take(&mut s.canvas_tools);
+    out.extend(crate::canvas_tools::show(
+        ui, area, img, s, &mut tools, tokens,
+    ));
+    s.canvas_tools = tools;
     if s.project.items().next().is_none() {
         ui.put(
             area,
@@ -227,7 +237,7 @@ impl TabViewer for Viewer<'_> {
             }
             Panel::Preview => preview_panel(ui, self.session, self.tokens, &mut self.actions),
             Panel::Inspector => {
-                let a = inspector::show(ui, self.session, self.tokens);
+                let a = inspector::show(ui, &mut *self.session, self.tokens);
                 self.actions.extend(a);
             }
             Panel::Timeline => {

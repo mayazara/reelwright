@@ -50,8 +50,16 @@ impl SortKey {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LibraryTab {
+    #[default]
+    Media,
+    Backgrounds,
+}
+
 #[derive(Debug, Default)]
 pub struct BinState {
+    pub tab: LibraryTab,
     pub search: String,
     pub filter: Option<MediaKind>,
     pub sort: SortKey,
@@ -65,6 +73,7 @@ pub enum BinAction {
     Remove(MediaId),
     Rename(MediaId, String),
     AddToTimeline(MediaId),
+    AddGenerated(rw_model::Generated),
 }
 
 /// Media to show, filtered and sorted. Search matches the name
@@ -107,6 +116,14 @@ pub fn show(
     tokens: Tokens,
 ) -> Option<BinAction> {
     let mut action = None;
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut state.tab, LibraryTab::Media, "Your media");
+        ui.selectable_value(&mut state.tab, LibraryTab::Backgrounds, "Backgrounds");
+    });
+    ui.separator();
+    if state.tab == LibraryTab::Backgrounds {
+        return crate::backgrounds::show(ui, tokens).map(BinAction::AddGenerated);
+    }
     ui.horizontal_wrapped(|ui| {
         if ui.button(IMPORT_FILES_LABEL).clicked() {
             action = Some(BinAction::ImportFiles);
