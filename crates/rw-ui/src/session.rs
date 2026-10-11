@@ -1,11 +1,18 @@
 //! An open project: the document, its history, cache and autosave state.
 
+use crate::preview::{Preview, UiGpu};
+use crate::timeline::{PeaksCache, TimelineState};
+use rw_audio::output::OutputFactory;
 use rw_cache::ProjectCache;
 use rw_edit::{Command, Compound, EditError, History, commands::AddMedia};
+use rw_engine::playback::Player;
 use rw_engine::{MediaEvent, MediaJobs};
-use rw_model::{ContentHash, MediaKind, Project, file};
-use std::collections::{HashMap, HashSet};
+use rw_model::{
+    ContentHash, Item, ItemId, MediaKind, Project, Time, Track, TrackId, TrackKind, file,
+};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Save at least this often while there are unsaved changes.
@@ -28,11 +35,28 @@ pub struct Notice {
     pub error: bool,
 }
 
+/// Copied clips, with the track each came from.
+#[derive(Debug, Clone, Default)]
+pub struct Clipboard {
+    pub items: Vec<(TrackId, TrackKind, Item)>,
+}
+
 pub struct Session {
     pub dir: PathBuf,
     pub project: Project,
     pub history: History,
     pub cache: ProjectCache,
+    pub player: Player,
+    pub selection: BTreeSet<ItemId>,
+    pub timeline: TimelineState,
+    pub clipboard: Clipboard,
+    pub peaks_cache: PeaksCache,
+    /// Present when the UI has a GPU (always in the app; not in tests).
+    pub preview: Option<Preview>,
+    /// Bumped on every project change; the preview re-renders on change.
+    pub revision: u64,
+    /// Pixel size the preview panel last asked for.
+    pub(crate) preview_size: (u32, u32),
     pub thumbs: HashMap<ContentHash, JobState>,
     pub proxies: HashMap<ContentHash, JobState>,
     pub peaks: HashMap<ContentHash, JobState>,
@@ -45,11 +69,25 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(dir: PathBuf, project: Project) -> Self {
+    pub fn new(
+        dir: PathBuf,
+        mut project: Project,
+        audio: Arc<dyn OutputFactory>,
+        gpu: Option<UiGpu>,
+    ) -> Self {
+        ensure_main_track(&mut project);
         let cache = ProjectCache::for_project(&dir);
         let now = Instant::now();
         let history = History::new();
         Session {
+            player: Player::new(audio, cache.clone(), Arc::new(project.clone())),
+            preview: gpu.map(|g| Preview::new(g, cache.clone())),
+            selection: BTreeSet::new(),
+            timeline: TimelineState::new(),
+            clipboard: Clipboard::default(),
+            peaks_cache: PeaksCache::default(),
+            revision: 0,
+            preview_size: (project.canvas.width / 2, project.canvas.height / 2),
             dir,
             project,
             last_seen_state: history.state(),
@@ -66,9 +104,32 @@ impl Session {
         }
     }
 
-    pub fn open(dir: &Path) -> Result<Self, file::FileError> {
+    pub fn open(
+        dir: &Path,
+        audio: Arc<dyn OutputFactory>,
+        gpu: Option<UiGpu>,
+    ) -> Result<Self, file::FileError> {
         let project = file::load(dir)?;
-        Ok(Session::new(dir.to_path_buf(), project))
+        let had_main = project.main_track().is_some();
+        let mut s = Session::new(dir.to_path_buf(), project, audio, gpu);
+        if !had_main {
+            // Projects from before the timeline existed gain a main track.
+            s.save();
+        }
+        Ok(s)
+    }
+
+    /// Call after any change to `project`: refreshes playback and preview.
+    pub fn changed(&mut self) {
+        self.revision += 1;
+        self.player.set_project(Arc::new(self.project.clone()));
+        let live: HashSet<ItemId> = self.project.items().map(|i| i.id).collect();
+        self.selection.retain(|id| live.contains(id));
+    }
+
+    /// The playhead (live while playing).
+    pub fn playhead(&self) -> Time {
+        self.player.position()
     }
 
     /// Starts thumbnail/proxy jobs for every media item whose cache files
@@ -91,18 +152,27 @@ impl Session {
 
     pub fn execute(&mut self, command: Box<dyn Command>) -> Result<(), EditError> {
         let r = self.history.execute(&mut self.project, command);
-        if let Err(e) = &r {
-            self.notify_error(e.to_string());
+        match &r {
+            Ok(()) => self.changed(),
+            Err(e) => self.notify_error(e.to_string()),
         }
         r
     }
 
     pub fn undo(&mut self) -> Option<String> {
-        self.history.undo(&mut self.project)
+        let r = self.history.undo(&mut self.project);
+        if r.is_some() {
+            self.changed();
+        }
+        r
     }
 
     pub fn redo(&mut self) -> Option<String> {
-        self.history.redo(&mut self.project)
+        let r = self.history.redo(&mut self.project);
+        if r.is_some() {
+            self.changed();
+        }
+        r
     }
 
     pub fn notify(&mut self, text: impl Into<String>) {
@@ -218,6 +288,9 @@ impl Session {
                 if let Err(e) = &result {
                     tracing::warn!(error = %e, "proxy failed");
                 }
+                if let Some(p) = self.preview.as_mut() {
+                    p.invalidate();
+                }
                 self.proxies.insert(
                     hash,
                     match result {
@@ -306,19 +379,32 @@ impl Session {
     }
 }
 
+/// Adds the magnetic main track if the project has none.
+pub fn ensure_main_track(project: &mut Project) {
+    if project.main_track().is_none() {
+        project.tracks.insert(0, Track::new_main());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use rw_edit::commands::RenameProject;
     use rw_model::Canvas;
 
+    fn test_session(dir: &Path, project: Project) -> Session {
+        Session::new(
+            dir.to_path_buf(),
+            project,
+            Arc::new(rw_audio::output::NullFactory::default()),
+            None,
+        )
+    }
+
     #[test]
     fn autosave_waits_for_idle() {
         let dir = tempfile::tempdir().unwrap();
-        let mut s = Session::new(
-            dir.path().to_path_buf(),
-            Project::new("A", Canvas::default()),
-        );
+        let mut s = test_session(dir.path(), Project::new("A", Canvas::default()));
         s.save();
         let t0 = Instant::now();
         s.execute(Box::new(RenameProject::new("B"))).unwrap();
@@ -332,10 +418,7 @@ mod tests {
     #[test]
     fn autosave_forced_after_interval_even_when_busy() {
         let dir = tempfile::tempdir().unwrap();
-        let mut s = Session::new(
-            dir.path().to_path_buf(),
-            Project::new("A", Canvas::default()),
-        );
+        let mut s = test_session(dir.path(), Project::new("A", Canvas::default()));
         let start = Instant::now();
         let mut saved = false;
         // A change every second for 40 s never leaves 2 s of idle time.

@@ -1,21 +1,31 @@
 //! egui app: panels, timeline widget, preview, property inspector, dialogs.
 
+pub mod actions;
+mod editing;
 pub mod format;
 pub mod home;
+pub mod icons;
+pub mod inspector;
 pub mod layout;
 pub mod media_bin;
+pub mod preview;
 pub mod session;
 pub mod settings;
 pub mod textures;
 pub mod theme;
+pub mod timeline;
 pub mod workspace;
 
+use actions::EditorAction;
 use eframe::egui::{self, Key, KeyboardShortcut, Modifiers, RichText};
 use egui_dock::DockState;
 use home::{HomeAction, HomeState};
 use media_bin::{BinAction, BinState};
+use preview::UiGpu;
+use rw_audio::output::{NullFactory, OutputFactory};
 use rw_edit::commands::{RemoveMedia, RenameMedia, RenameProject, SetCanvas};
 use rw_engine::MediaJobs;
+use rw_engine::export::{ExportReport, ExportSettings};
 use rw_engine::import::scan_folder;
 use rw_media::Ffmpeg;
 use rw_model::library::{Library, ProjectSummary};
@@ -25,6 +35,7 @@ use settings::Settings;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Instant;
 use textures::Textures;
 use theme::{ThemeMode, Tokens};
@@ -37,6 +48,7 @@ pub const REDO_ALT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND,
 pub const SAVE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::S);
 
 pub const HOME_LABEL: &str = "Home";
+pub const EXPORT_LABEL: &str = "Export";
 pub const UNDO_LABEL: &str = "Undo";
 pub const REDO_LABEL: &str = "Redo";
 
@@ -69,10 +81,33 @@ pub struct EditorUi {
     textures: Textures,
     dock: DockState<Panel>,
     editing_name: Option<String>,
+    audio: Arc<dyn OutputFactory>,
+    ui_gpu: Option<UiGpu>,
+    export: Option<ExportJob>,
+}
+
+/// An export running on a background thread.
+struct ExportJob {
+    progress: Arc<AtomicU32>,
+    cancel: Arc<AtomicBool>,
+    result: crossbeam_channel::Receiver<Result<ExportReport, String>>,
+}
+
+impl ExportJob {
+    fn fraction(&self) -> f32 {
+        f32::from_bits(self.progress.load(Ordering::Relaxed))
+    }
 }
 
 impl EditorUi {
-    pub fn new(ctx: &egui::Context, config: Config) -> Self {
+    /// `ui_gpu` is the UI's wgpu device (absent in headless tests); `audio`
+    /// opens the sound output for playback.
+    pub fn new(
+        ctx: &egui::Context,
+        config: Config,
+        ui_gpu: Option<UiGpu>,
+        audio: Arc<dyn OutputFactory>,
+    ) -> Self {
         ctx.set_fonts(theme::fonts());
         let settings = Settings::load(&config.settings_file);
         let waker_ctx = ctx.clone();
@@ -94,6 +129,9 @@ impl EditorUi {
             textures: Textures::default(),
             dock: workspace::default_layout(),
             editing_name: None,
+            audio,
+            ui_gpu,
+            export: None,
         }
     }
 
@@ -148,7 +186,7 @@ impl EditorUi {
     /// Opens a project folder in the editor.
     pub fn open_project(&mut self, dir: &Path) {
         self.close_project();
-        match Session::open(dir) {
+        match Session::open(dir, self.audio.clone(), self.ui_gpu.clone()) {
             Ok(mut s) => {
                 s.prepare_all(&self.jobs);
                 self.settings.touch_recent(dir);
@@ -275,6 +313,120 @@ impl EditorUi {
                     let _ = s.execute(Box::new(RenameMedia::new(id, name)));
                 }
             }
+            BinAction::AddToTimeline(id) => {
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::AppendMedia(id));
+                }
+            }
+        }
+    }
+
+    /// Applies an action to the open project (export starts a job).
+    pub fn apply(&mut self, action: EditorAction) {
+        if action == EditorAction::Export {
+            self.choose_export_path();
+        } else if let Some(s) = self.session.as_mut() {
+            s.apply(action);
+        }
+    }
+
+    fn choose_export_path(&mut self) {
+        let Some(s) = self.session.as_ref() else {
+            return;
+        };
+        let dir = self
+            .config
+            .projects_dir
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default();
+        let name = format!("{}.mp4", rw_model::library::sanitize(&s.project.name));
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export video")
+            .set_directory(dir)
+            .set_file_name(name)
+            .add_filter("MP4 video", &["mp4"])
+            .save_file()
+        {
+            self.export_to(path);
+        }
+    }
+
+    /// Starts exporting the open project to `path` in the background.
+    pub fn export_to(&mut self, path: PathBuf) {
+        let Some(s) = self.session.as_mut() else {
+            return;
+        };
+        if self.export.is_some() {
+            return;
+        }
+        if s.project.duration() <= rw_model::Time::ZERO {
+            s.notify_error("Add something to the timeline before exporting.");
+            return;
+        }
+        s.player.pause();
+        let project = s.project.clone();
+        let cache = s.cache.clone();
+        let fallback_gpu = self.ui_gpu.as_ref().map(|g| g.gpu.clone());
+        let progress = Arc::new(AtomicU32::new(0f32.to_bits()));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        let (p, c) = (progress.clone(), cancel.clone());
+        std::thread::Builder::new()
+            .name("export".into())
+            .spawn(move || {
+                // A separate device keeps export from stalling the preview.
+                let gpu = rw_render::Gpu::headless().ok().or(fallback_gpu);
+                let result = match gpu {
+                    None => Err("No graphics device is available for rendering.".to_owned()),
+                    Some(gpu) => {
+                        let settings = ExportSettings::for_project(&project, &path);
+                        rw_engine::export::export(&project, &cache, &gpu, &settings, &c, &|f| {
+                            p.store(f.to_bits(), Ordering::Relaxed);
+                        })
+                        .map_err(|e| e.to_string())
+                    }
+                };
+                let _ = tx.send(result);
+            })
+            .expect("spawn export");
+        self.export = Some(ExportJob {
+            progress,
+            cancel,
+            result: rx,
+        });
+    }
+
+    pub fn exporting(&self) -> Option<f32> {
+        self.export.as_ref().map(ExportJob::fraction)
+    }
+
+    pub fn cancel_export(&mut self) {
+        if let Some(e) = &self.export {
+            e.cancel.store(true, Ordering::Relaxed);
+        }
+    }
+
+    fn poll_export(&mut self, ctx: &egui::Context) {
+        let Some(job) = &self.export else { return };
+        match job.result.try_recv() {
+            Ok(result) => {
+                self.export = None;
+                if let Some(s) = self.session.as_mut() {
+                    match result {
+                        Ok(r) => s.notify(format!(
+                            "Exported {} ({} frames, {}) to {}",
+                            format::duration(r.duration),
+                            r.frames,
+                            r.encoder,
+                            r.path.display()
+                        )),
+                        Err(e) if e.contains("cancelled") => s.notify("Export cancelled."),
+                        Err(e) => s.notify_error(format!("Export failed: {e}")),
+                    }
+                }
+            }
+            Err(_) => ctx.request_repaint_after(std::time::Duration::from_millis(100)),
         }
     }
 
@@ -285,6 +437,7 @@ impl EditorUi {
                 && let Some(changed) = s.handle(&self.jobs, event)
             {
                 self.textures.forget(&changed);
+                s.peaks_cache.forget(&changed);
             }
         }
     }
@@ -316,6 +469,9 @@ impl EditorUi {
         if ctx.input_mut(|i| i.consume_shortcut(&SAVE)) {
             s.save();
         }
+        for action in shortcuts(ctx) {
+            self.apply(action);
+        }
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
@@ -344,9 +500,11 @@ impl EditorUi {
         }
 
         let mut go_home = false;
+        self.poll_export(&ctx);
         self.top_bar(ui, tokens, &mut go_home);
-        let session = self.session.as_ref().expect("checked above");
-        let bin_action = workspace::show(
+        let session = self.session.as_mut().expect("checked above");
+        session.tick_playback();
+        let out = workspace::show(
             ui,
             &mut self.dock,
             session,
@@ -354,14 +512,20 @@ impl EditorUi {
             &mut self.textures,
             tokens,
         );
-        if let Some(a) = bin_action {
+        if let Some(a) = out.bin {
             self.handle_bin_action(a);
+        }
+        for a in out.actions {
+            self.apply(a);
         }
         if go_home {
             self.close_project();
             return;
         }
         if let Some(s) = self.session.as_mut() {
+            if s.player.is_playing() {
+                ctx.request_repaint();
+            }
             s.autosave(Instant::now());
             // Wake up for the idle autosave even if nothing else happens.
             if s.is_dirty() {
@@ -371,6 +535,20 @@ impl EditorUi {
     }
 
     fn top_bar(&mut self, ui: &mut egui::Ui, tokens: Tokens, go_home: &mut bool) {
+        let mut start_export = false;
+        self.top_bar_inner(ui, tokens, go_home, &mut start_export);
+        if start_export {
+            self.apply(EditorAction::Export);
+        }
+    }
+
+    fn top_bar_inner(
+        &mut self,
+        ui: &mut egui::Ui,
+        tokens: Tokens,
+        go_home: &mut bool,
+        start_export: &mut bool,
+    ) {
         let Some(s) = self.session.as_mut() else {
             return;
         };
@@ -448,6 +626,35 @@ impl EditorUi {
                     if redo.clicked() {
                         s.redo();
                     }
+                    ui.separator();
+                    let exporting = self.export.as_ref().map(ExportJob::fraction);
+                    match exporting {
+                        None => {
+                            let export = egui::Button::new(
+                                RichText::new(EXPORT_LABEL).color(tokens.on_accent),
+                            )
+                            .fill(tokens.accent);
+                            if ui
+                                .add(export)
+                                .on_hover_text("Export video (Ctrl+E)")
+                                .clicked()
+                            {
+                                *start_export = true;
+                            }
+                        }
+                        Some(f) => {
+                            ui.add(
+                                egui::ProgressBar::new(f)
+                                    .desired_width(140.0)
+                                    .show_percentage(),
+                            );
+                            if ui.button("Cancel").clicked()
+                                && let Some(e) = &self.export
+                            {
+                                e.cancel.store(true, Ordering::Relaxed);
+                            }
+                        }
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let color = if s.save_error.is_some() {
                             tokens.danger
@@ -488,9 +695,66 @@ impl EditorUi {
 
     /// Saves any open project. Called when the app is closing.
     pub fn shutdown(&mut self) {
+        self.cancel_export();
         self.close_project();
         self.save_settings();
     }
+}
+
+/// Keyboard shortcuts from the plan, as actions. Undo/redo/save are handled
+/// separately because they apply even with nothing selected.
+fn shortcuts(ctx: &egui::Context) -> Vec<EditorAction> {
+    use EditorAction as A;
+    let cmd = Modifiers::COMMAND;
+    let cmd_shift = Modifiers::COMMAND.plus(Modifiers::SHIFT);
+    let table: [(Modifiers, Key, A); 17] = [
+        (cmd_shift, Key::G, A::Ungroup),
+        (cmd, Key::G, A::Group),
+        (cmd, Key::D, A::Duplicate),
+        (cmd, Key::E, A::Export),
+        (cmd, Key::Equals, A::ZoomIn),
+        (cmd, Key::Plus, A::ZoomIn),
+        (cmd, Key::Minus, A::ZoomOut),
+        (Modifiers::SHIFT, Key::Z, A::ZoomFit),
+        (Modifiers::SHIFT, Key::Delete, A::Delete { ripple: true }),
+        (Modifiers::NONE, Key::Delete, A::Delete { ripple: false }),
+        (Modifiers::NONE, Key::Backspace, A::Delete { ripple: false }),
+        (Modifiers::NONE, Key::Space, A::PlayPause),
+        (Modifiers::NONE, Key::S, A::SplitAtPlayhead),
+        (Modifiers::NONE, Key::ArrowLeft, A::StepFrames(-1)),
+        (Modifiers::NONE, Key::ArrowRight, A::StepFrames(1)),
+        (Modifiers::NONE, Key::ArrowUp, A::PrevEdit),
+        (Modifiers::NONE, Key::ArrowDown, A::NextEdit),
+    ];
+    let mut out = Vec::new();
+    ctx.input_mut(|i| {
+        for (mods, key, action) in table {
+            if i.consume_shortcut(&KeyboardShortcut::new(mods, key)) {
+                out.push(action);
+            }
+        }
+        // The platform turns Cmd/Ctrl+C and V into clipboard events.
+        for e in &i.events {
+            match e {
+                egui::Event::Copy => out.push(A::Copy),
+                egui::Event::Paste(_) => out.push(A::Paste),
+                egui::Event::Key {
+                    key: Key::C,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } if modifiers.command => out.push(A::Copy),
+                egui::Event::Key {
+                    key: Key::V,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } if modifiers.command => out.push(A::Paste),
+                _ => {}
+            }
+        }
+    });
+    out
 }
 
 /// The eframe application.
@@ -499,9 +763,19 @@ pub struct App {
 }
 
 impl App {
+    /// Creates the app with silent (device-less) audio output.
     pub fn new(cc: &eframe::CreationContext<'_>, config: Config) -> Self {
+        Self::with_audio(cc, config, Arc::new(NullFactory::default()))
+    }
+
+    pub fn with_audio(
+        cc: &eframe::CreationContext<'_>,
+        config: Config,
+        audio: Arc<dyn OutputFactory>,
+    ) -> Self {
+        let gpu = cc.wgpu_render_state.as_ref().map(UiGpu::from_render_state);
         Self {
-            ui: EditorUi::new(&cc.egui_ctx, config),
+            ui: EditorUi::new(&cc.egui_ctx, config, gpu, audio),
         }
     }
 

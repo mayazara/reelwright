@@ -113,6 +113,9 @@ pub fn visuals(mode: ThemeMode) -> egui::Visuals {
     v.error_fg_color = t.danger;
     v.selection.bg_fill = t.accent;
     v.selection.stroke = Stroke::new(1.0, t.on_accent);
+    // Sliders show the filled part in the accent colour; without it the rail
+    // is nearly invisible against panel surfaces.
+    v.slider_trailing_fill = true;
 
     let w = &mut v.widgets;
     w.noninteractive.bg_fill = t.surface;
@@ -129,7 +132,8 @@ pub fn visuals(mode: ThemeMode) -> egui::Visuals {
         state.corner_radius = radius;
         state.fg_stroke = Stroke::new(1.0, t.text);
     }
-    w.inactive.bg_stroke = Stroke::new(1.0, t.border);
+    // Checkboxes and slider rails need a visible outline at rest.
+    w.inactive.bg_stroke = Stroke::new(1.0, t.text_muted.gamma_multiply(0.6));
     w.hovered.bg_stroke = Stroke::new(1.0, t.accent);
     w.active.bg_stroke = Stroke::new(1.0, t.accent);
     v

@@ -1,6 +1,6 @@
 //! Human-readable formatting for the UI.
 
-use rw_model::Time;
+use rw_model::{FrameRate, Time};
 use std::time::{Duration, SystemTime};
 
 /// `m:ss` or `h:mm:ss`, rounded down to whole seconds.
@@ -12,6 +12,21 @@ pub fn duration(t: Time) -> String {
     } else {
         format!("{m}:{s:02}")
     }
+}
+
+/// `hh:mm:ss:ff` for the frame showing at `t`. Rates like 29.97 count
+/// nominal frames per second (non-drop-frame).
+pub fn timecode(t: Time, fps: FrameRate) -> String {
+    let frame = fps.time_to_frame(t.max(Time::ZERO));
+    let nominal = (fps.as_f64().round() as i64).max(1);
+    let (secs, ff) = (frame / nominal, frame % nominal);
+    format!(
+        "{:02}:{:02}:{:02}:{:02}",
+        secs / 3600,
+        (secs / 60) % 60,
+        secs % 60,
+        ff
+    )
 }
 
 pub fn bytes(n: u64) -> String {
@@ -55,5 +70,14 @@ mod tests {
         assert_eq!(ago(now, now), "just now");
         assert_eq!(ago(now - Duration::from_secs(7200), now), "2 h ago");
         assert_eq!(ago(now + Duration::from_secs(10), now), "just now");
+        let fps = FrameRate::FPS_30;
+        assert_eq!(
+            timecode(fps.frame_to_time(3_725 * 30 + 29), fps),
+            "01:02:05:29"
+        );
+        assert_eq!(
+            timecode(Time::ZERO, FrameRate::new(30000, 1001)),
+            "00:00:00:00"
+        );
     }
 }

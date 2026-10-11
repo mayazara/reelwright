@@ -84,7 +84,8 @@ impl Library {
 
     /// Creates and saves a new project in a fresh folder.
     pub fn create(&self, name: &str, canvas: Canvas) -> Result<(PathBuf, Project), FileError> {
-        let project = Project::new(name.trim(), canvas);
+        let mut project = Project::new(name.trim(), canvas);
+        project.tracks.push(crate::project::Track::new_main());
         let dir = self.unique_dir(&project.name)?;
         file::save(&dir, &project)?;
         Ok((dir, project))

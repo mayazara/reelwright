@@ -3052,15 +3052,18 @@ version = "0.1.0"
 name = "rw-ui"
 version = "0.1.0"
 dependencies = [
+ "crossbeam-channel",
  "eframe",
  "egui_dock",
  "egui_kittest",
  "rfd",
+ "rw-audio",
  "rw-cache",
  "rw-edit",
  "rw-engine",
  "rw-media",
  "rw-model",
+ "rw-render",
  "serde",
  "serde_json",
  "tempfile",

@@ -20,6 +20,7 @@ pub const UNUSED_BADGE: &str = "Unused";
 pub const MISSING_BADGE: &str = "Missing";
 pub const RENAME_LABEL: &str = "Rename…";
 pub const REMOVE_LABEL: &str = "Remove from project";
+pub const ADD_LABEL: &str = "Add to timeline";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortKey {
@@ -63,6 +64,7 @@ pub enum BinAction {
     ImportFolder,
     Remove(MediaId),
     Rename(MediaId, String),
+    AddToTimeline(MediaId),
 }
 
 /// Media to show, filtered and sorted. Search matches the name
@@ -277,7 +279,14 @@ fn tile(
             });
         })
         .response
-        .interact(Sense::click());
+        .interact(Sense::click_and_drag());
+    // Drag onto the timeline; double-click adds at the playhead.
+    if resp.dragged() {
+        resp.dnd_set_drag_payload(m.id);
+    }
+    if resp.double_clicked() && !missing {
+        action = Some(BinAction::AddToTimeline(m.id));
+    }
 
     let mut tip = format!("{}\n{}", m.path.display(), format::bytes(m.size_bytes));
     if let Some(v) = &m.info.video {
@@ -299,6 +308,13 @@ fn tile(
     }
     let resp = resp.on_hover_text(tip);
     resp.context_menu(|ui| {
+        if ui
+            .add_enabled(!missing, egui::Button::new(ADD_LABEL))
+            .clicked()
+        {
+            action = Some(BinAction::AddToTimeline(m.id));
+            ui.close();
+        }
         if ui.button(RENAME_LABEL).clicked() {
             state.renaming = Some((m.id, m.name.clone()));
             ui.close();
