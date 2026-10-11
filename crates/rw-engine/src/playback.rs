@@ -104,6 +104,16 @@ struct Session {
     threads: Vec<std::thread::JoinHandle<()>>,
 }
 
+impl Session {
+    /// Devices report their real latency once running; keep the clock in step.
+    fn refresh_latency(&self) {
+        if let Some(o) = &self.output {
+            let ticks = Time::from_secs_f64(o.latency().as_secs_f64()).ticks();
+            self.clock.latency.store(ticks, Ordering::Relaxed);
+        }
+    }
+}
+
 impl Drop for Session {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
@@ -169,7 +179,10 @@ impl Player {
     /// Current playhead.
     pub fn position(&self) -> Time {
         match &self.session {
-            Some(s) => s.clock.now(),
+            Some(s) => {
+                s.refresh_latency();
+                s.clock.now()
+            }
             None => self.paused_at,
         }
     }
@@ -349,6 +362,7 @@ impl Player {
     /// The newest prepared frame whose time has come, if a new one is ready.
     pub fn take_frame(&self) -> Option<Prepared> {
         let s = self.session.as_ref()?;
+        s.refresh_latency();
         let now = s.clock.now();
         let mut q = s.frames.lock().unwrap_or_else(|e| e.into_inner());
         let mut shown = None;

@@ -96,7 +96,13 @@ fn main() -> anyhow::Result<()> {
     eframe::run_native(
         app::NAME,
         options,
-        Box::new(move |cc| Ok(Box::new(rw_ui::App::new(cc, config)))),
+        Box::new(move |cc| {
+            Ok(Box::new(rw_ui::App::with_audio(
+                cc,
+                config,
+                std::sync::Arc::new(rw_audio::device::DeviceFactory),
+            )))
+        }),
     )
     .map_err(|e| anyhow::anyhow!("{e}"))
     .context("UI exited with an error")

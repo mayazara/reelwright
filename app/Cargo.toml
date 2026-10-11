@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 rw-model.workspace = true
 rw-ui.workspace = true
+rw-audio.workspace = true
 eframe.workspace = true
 anyhow.workspace = true
 tracing.workspace = true

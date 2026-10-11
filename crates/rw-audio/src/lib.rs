@@ -3,6 +3,7 @@
 //! M2 provides the timeline mixer used by both playback and export, and
 //! audio outputs that drive the playback clock.
 
+pub mod device;
 mod mixer;
 pub mod output;
 

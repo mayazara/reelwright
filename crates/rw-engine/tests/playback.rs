@@ -237,3 +237,43 @@ fn soak_multitrack_1080p() {
         "clock {end} after {secs}s"
     );
 }
+
+/// Plays a beep through the real sound card. Run with
+/// `cargo test -p rw-engine --test playback device -- --ignored --nocapture`.
+#[test]
+#[ignore = "needs a sound device and makes a sound"]
+fn device_output_plays_in_real_time() {
+    let g = common::fixtures();
+    let tmp = tempfile::tempdir().unwrap();
+    let beep = probe_file(&Ffmpeg::new(), &g.path("beep_44k.wav")).unwrap();
+    let mut p = Project::new("p", Canvas::custom(64, 64));
+    let mut audio = Track::new(TrackKind::Audio);
+    audio.items.push(Item::new(&beep, Time::ZERO));
+    p.media.push(beep);
+    p.tracks.push(Track::new_main());
+    p.tracks.push(audio);
+    let mut player = Player::new(
+        Arc::new(rw_audio::device::DeviceFactory),
+        ProjectCache::for_project(tmp.path()),
+        Arc::new(p),
+    );
+    player.play(Time::from_millis(500), (64, 64), false);
+    let start = Instant::now();
+    std::thread::sleep(Duration::from_millis(1500));
+    let pos = player.position();
+    let elapsed = start.elapsed().as_secs_f64();
+    let name = player.output_name().to_owned();
+    let stats = player.stats();
+    player.pause();
+    eprintln!(
+        "device: {name}; clock advanced {:.3} s in {elapsed:.3} s; underruns {}",
+        (pos - Time::from_millis(500)).as_secs_f64(),
+        stats.underrun_samples
+    );
+    assert_ne!(name, "No audio device", "device failed to open");
+    let advanced = (pos - Time::from_millis(500)).as_secs_f64();
+    assert!(
+        (advanced - elapsed).abs() < 0.25,
+        "clock {advanced} vs wall {elapsed}"
+    );
+}
