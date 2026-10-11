@@ -35,6 +35,7 @@ pub struct Session {
     pub cache: ProjectCache,
     pub thumbs: HashMap<ContentHash, JobState>,
     pub proxies: HashMap<ContentHash, JobState>,
+    pub peaks: HashMap<ContentHash, JobState>,
     pending_batches: HashSet<u64>,
     pub notices: Vec<Notice>,
     last_save: Instant,
@@ -56,6 +57,7 @@ impl Session {
             cache,
             thumbs: HashMap::new(),
             proxies: HashMap::new(),
+            peaks: HashMap::new(),
             pending_batches: HashSet::new(),
             notices: Vec::new(),
             last_save: now,
@@ -130,8 +132,8 @@ impl Session {
         !self.pending_batches.is_empty()
     }
 
-    /// Applies a finished background job. Returns paths of thumbnails that
-    /// changed on disk.
+    /// Applies a finished background job. Returns the path of a cache file
+    /// (thumbnail or peaks) that changed on disk.
     pub fn handle(&mut self, jobs: &MediaJobs, event: MediaEvent) -> Option<PathBuf> {
         match event {
             MediaEvent::Imported {
@@ -187,6 +189,17 @@ impl Session {
             MediaEvent::Thumbnail { hash, result } => {
                 let path = self.cache.thumbnail(&hash);
                 self.thumbs.insert(
+                    hash,
+                    match result {
+                        Ok(_) => JobState::Done,
+                        Err(e) => JobState::Failed(e),
+                    },
+                );
+                Some(path)
+            }
+            MediaEvent::Peaks { hash, result } => {
+                let path = self.cache.peaks(&hash);
+                self.peaks.insert(
                     hash,
                     match result {
                         Ok(_) => JobState::Done,

@@ -4,7 +4,7 @@
 //! single dedicated worker so a long transcode never blocks thumbnails.
 //! Results arrive as [`MediaEvent`]s that the UI drains each frame.
 
-use crate::import::{ensure_proxy, ensure_thumbnail, probe_file};
+use crate::import::{ensure_peaks, ensure_proxy, ensure_thumbnail, probe_file};
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use rw_cache::ProjectCache;
 use rw_media::{MediaError, MediaIo};
@@ -24,6 +24,10 @@ pub enum MediaEvent {
         failed: Vec<(PathBuf, String)>,
     },
     Thumbnail {
+        hash: ContentHash,
+        result: Result<Option<PathBuf>, String>,
+    },
+    Peaks {
         hash: ContentHash,
         result: Result<Option<PathBuf>, String>,
     },
@@ -171,6 +175,20 @@ impl MediaJobs {
                 result,
             });
         });
+        if media.info.audio.is_some() {
+            let (c, m) = (cache.clone(), media.clone());
+            let cancel = self.cancel_flag();
+            self.submit(false, move |s| {
+                let result = ensure_peaks(&c, &m, &cancel);
+                if matches!(result, Err(MediaError::Cancelled)) {
+                    return;
+                }
+                s.emit(MediaEvent::Peaks {
+                    hash: m.hash.clone(),
+                    result: result.map_err(|e| e.to_string()),
+                });
+            });
+        }
         if rw_media::needs_proxy(&media.info) {
             let (c, m) = (cache.clone(), media.clone());
             let cancel = self.cancel_flag();
@@ -197,8 +215,8 @@ impl MediaJobs {
         }
     }
 
-    /// Cancels queued and running proxy jobs, e.g. when a project closes.
-    /// Light jobs are short and simply finish.
+    /// Cancels queued and running proxy and peak jobs, e.g. when a project
+    /// closes. Probes and thumbnails are short and simply finish.
     pub fn cancel_all(&self) {
         let mut flag = self.cancel.lock().unwrap_or_else(|e| e.into_inner());
         flag.store(true, Ordering::Relaxed);

@@ -2965,6 +2965,7 @@ dependencies = [
  "proptest",
  "rw-model",
  "thiserror 2.0.21",
+ "uuid",
 ]
 
 [[package]]

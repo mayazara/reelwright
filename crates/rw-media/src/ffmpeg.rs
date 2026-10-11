@@ -12,7 +12,7 @@ use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// FFmpeg's internal time base for container-level durations and seeks.
-const AV_TIME_BASE: i32 = 1_000_000;
+pub(crate) const AV_TIME_BASE: i32 = 1_000_000;
 
 /// Demuxers that read single still images.
 const IMAGE_DEMUXERS: &[&str] = &[
@@ -54,14 +54,14 @@ impl Default for Ffmpeg {
     }
 }
 
-fn open(path: &Path) -> Result<Input, MediaError> {
+pub(crate) fn open(path: &Path) -> Result<Input, MediaError> {
     ff::format::input(path).map_err(|e| MediaError::Open {
         path: path.display().to_string(),
         reason: e.to_string(),
     })
 }
 
-fn decode_err(e: ff::Error) -> MediaError {
+pub(crate) fn decode_err(e: ff::Error) -> MediaError {
     MediaError::Decode(e.to_string())
 }
 
@@ -70,7 +70,7 @@ fn encode_err(e: ff::Error) -> MediaError {
 }
 
 /// Index of the main video stream, ignoring embedded cover art.
-fn video_stream_index(ictx: &Input) -> Option<usize> {
+pub(crate) fn video_stream_index(ictx: &Input) -> Option<usize> {
     let is_picture = |s: &ff::format::stream::Stream| {
         s.parameters().medium() == Type::Video
             && !s.disposition().contains(Disposition::ATTACHED_PIC)
@@ -92,7 +92,7 @@ fn has_alpha(format: Pixel) -> bool {
 
 /// Clockwise display rotation from the stream's display matrix, snapped to
 /// a multiple of 90 degrees.
-fn rotation(stream: &ff::format::stream::Stream) -> u16 {
+pub(crate) fn rotation(stream: &ff::format::stream::Stream) -> u16 {
     // SAFETY: `stream` borrows a live AVStream; its `codecpar` and side-data
     // array are owned by the format context and valid for the borrow. We only
     // read, and check the side-data size before reading the 3x3 matrix.

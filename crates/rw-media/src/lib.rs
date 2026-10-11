@@ -3,12 +3,18 @@
 //!
 //! Nothing outside this crate touches FFmpeg, so the binding can be swapped.
 
+pub mod decode;
+pub mod encode;
 mod ffmpeg;
 #[cfg(feature = "fixtures")]
 pub mod fixtures;
+pub mod peaks;
 mod rgba;
 
+pub use decode::{AudioReader, VideoFrame, VideoReader};
+pub use encode::{AudioSettings, Mp4Writer, VideoSettings};
 pub use ffmpeg::Ffmpeg;
+pub use peaks::Peaks;
 pub use rgba::RgbaImage;
 
 use rw_model::{MediaInfo, MediaKind, Time};

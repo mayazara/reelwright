@@ -12,7 +12,10 @@ pub mod time;
 
 pub use ids::{GroupId, ItemId, MarkerId, MediaId, ProjectId, TrackId};
 pub use media::{AudioInfo, ContentHash, MediaInfo, MediaKind, MediaRef, VideoInfo};
-pub use project::{AspectPreset, Canvas, Item, ItemKind, Marker, Project, Rgba, Track, TrackKind};
+pub use project::{
+    AspectPreset, Canvas, IMAGE_DURATION, Item, ItemKind, MAX_GAIN, Marker, Project, Rgba, Track,
+    TrackKind, default_duration, max_duration, track_kind_for,
+};
 pub use time::{FrameRate, TICKS_PER_SECOND, Time};
 
 /// Product identity. The name is a placeholder; changing it here renames the app.

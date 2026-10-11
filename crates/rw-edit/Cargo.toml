@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 rw-model.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

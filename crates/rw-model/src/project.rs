@@ -1,7 +1,7 @@
 //! The project document: canvas, media, tracks and markers.
 
 use crate::ids::{GroupId, ItemId, MarkerId, MediaId, ProjectId, TrackId};
-use crate::media::MediaRef;
+use crate::media::{MediaKind, MediaRef};
 use crate::time::{FrameRate, Time};
 use serde::{Deserialize, Serialize};
 
@@ -145,6 +145,24 @@ pub enum ItemKind {
     Media { media: MediaId },
 }
 
+/// Highest item or track gain, +12 dB.
+pub const MAX_GAIN: f32 = 3.981_072;
+
+/// Default length of a still image placed on the timeline.
+pub const IMAGE_DURATION: Time = Time::from_secs(5);
+
+fn unity() -> f32 {
+    1.0
+}
+
+fn is_unity(v: &f32) -> bool {
+    *v == 1.0
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
+}
+
 /// A clip placed on a track.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
@@ -154,11 +172,36 @@ pub struct Item {
     /// Offset into the source where playback begins.
     pub source_in: Time,
     pub kind: ItemKind,
+    /// Items sharing a group move, trim and delete together.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupId>,
+    /// Linear audio gain, `0.0..=MAX_GAIN`.
+    #[serde(default = "unity", skip_serializing_if = "is_unity")]
+    pub gain: f32,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub muted: bool,
+    /// Set on a video item whose sound was detached to an audio track, so
+    /// the sound is not played twice.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub audio_detached: bool,
 }
 
 impl Item {
+    /// A new item showing `media` from its beginning.
+    pub fn new(media: &MediaRef, start: Time) -> Self {
+        Item {
+            id: ItemId::new(),
+            start,
+            duration: default_duration(media),
+            source_in: Time::ZERO,
+            kind: ItemKind::Media { media: media.id },
+            group: None,
+            gain: 1.0,
+            muted: false,
+            audio_detached: false,
+        }
+    }
+
     pub fn end(&self) -> Time {
         self.start + self.duration
     }
@@ -168,19 +211,94 @@ impl Item {
             ItemKind::Media { media } => Some(media),
         }
     }
+
+    /// Whether `t` falls inside the item (start inclusive, end exclusive).
+    pub fn contains(&self, t: Time) -> bool {
+        self.start <= t && t < self.end()
+    }
+
+    /// Source time shown at timeline time `t`.
+    pub fn source_time(&self, t: Time) -> Time {
+        self.source_in + (t - self.start)
+    }
+}
+
+/// How long an item for `media` is when first placed.
+pub fn default_duration(media: &MediaRef) -> Time {
+    match media.kind() {
+        MediaKind::Image => IMAGE_DURATION,
+        _ if media.info.duration > Time::ZERO => media.info.duration,
+        _ => IMAGE_DURATION,
+    }
+}
+
+/// Longest an item for `media` can be from `source_in`, or `None` if it
+/// can be stretched indefinitely (still images).
+pub fn max_duration(media: &MediaRef, source_in: Time) -> Option<Time> {
+    match media.kind() {
+        MediaKind::Image => None,
+        _ => Some((media.info.duration - source_in).max(Time::ZERO)),
+    }
+}
+
+/// Which track kind holds items for a media kind.
+pub fn track_kind_for(kind: MediaKind) -> TrackKind {
+    match kind {
+        MediaKind::Audio => TrackKind::Audio,
+        _ => TrackKind::Video,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Track {
     pub id: TrackId,
     pub kind: TrackKind,
+    /// The main track is magnetic: its items always sit back to back from
+    /// time zero. A project has at most one, and it is never removed
+    /// automatically.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub main: bool,
     #[serde(default)]
     pub locked: bool,
     #[serde(default)]
     pub hidden: bool,
     #[serde(default)]
     pub muted: bool,
+    /// Linear gain applied to the track's mix, `0.0..=MAX_GAIN`.
+    #[serde(default = "unity", skip_serializing_if = "is_unity")]
+    pub gain: f32,
     pub items: Vec<Item>,
+}
+
+impl Track {
+    pub fn new(kind: TrackKind) -> Self {
+        Track {
+            id: TrackId::new(),
+            kind,
+            main: false,
+            locked: false,
+            hidden: false,
+            muted: false,
+            gain: 1.0,
+            items: Vec::new(),
+        }
+    }
+
+    pub fn new_main() -> Self {
+        Track {
+            main: true,
+            ..Track::new(TrackKind::Video)
+        }
+    }
+
+    pub fn end(&self) -> Time {
+        self.items.iter().map(Item::end).max().unwrap_or(Time::ZERO)
+    }
+
+    /// Item playing at `t`, if any.
+    pub fn item_at(&self, t: Time) -> Option<&Item> {
+        self.items.iter().find(|i| i.contains(t))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -199,7 +317,7 @@ pub struct Project {
     pub name: String,
     pub canvas: Canvas,
     pub media: Vec<MediaRef>,
-    /// Bottom-most first; the first video track is the main track.
+    /// Bottom-most first. Video tracks draw over the tracks before them.
     pub tracks: Vec<Track>,
     #[serde(default)]
     pub markers: Vec<Marker>,
@@ -232,6 +350,26 @@ impl Project {
             .iter()
             .flat_map(|t| &t.items)
             .any(|i| i.media() == Some(id))
+    }
+
+    pub fn track(&self, id: TrackId) -> Option<&Track> {
+        self.tracks.iter().find(|t| t.id == id)
+    }
+
+    pub fn main_track(&self) -> Option<&Track> {
+        self.tracks.iter().find(|t| t.main)
+    }
+
+    /// Finds an item and the index of its track.
+    pub fn find_item(&self, id: ItemId) -> Option<(usize, &Item)> {
+        self.tracks
+            .iter()
+            .enumerate()
+            .find_map(|(ti, t)| t.items.iter().find(|i| i.id == id).map(|i| (ti, i)))
+    }
+
+    pub fn items(&self) -> impl Iterator<Item = &Item> {
+        self.tracks.iter().flat_map(|t| &t.items)
     }
 
     /// Length of the timeline: end of the last item.

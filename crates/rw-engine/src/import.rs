@@ -89,6 +89,22 @@ pub fn ensure_thumbnail(
     Ok(Some(path))
 }
 
+/// Computes waveform peaks if the media has sound and they are missing.
+pub fn ensure_peaks(
+    cache: &ProjectCache,
+    media: &MediaRef,
+    cancel: &AtomicBool,
+) -> Result<Option<PathBuf>, MediaError> {
+    if media.info.audio.is_none() {
+        return Ok(None);
+    }
+    let path = cache.peaks(&media.hash);
+    if !path.exists() {
+        rw_media::Peaks::compute(&media.path, cancel)?.save(&path)?;
+    }
+    Ok(Some(path))
+}
+
 /// Writes the preview proxy if the media needs one and it is missing.
 pub fn ensure_proxy(
     io: &dyn MediaIo,

@@ -42,6 +42,13 @@ impl ProjectCache {
             .join(format!("{}.mkv", hash.as_str()))
     }
 
+    /// Waveform peaks.
+    pub fn peaks(&self, hash: &ContentHash) -> PathBuf {
+        self.root
+            .join("peaks")
+            .join(format!("{}.pk", hash.as_str()))
+    }
+
     /// Thumbnail shown for the whole project on the home screen.
     pub fn project_thumbnail(&self) -> PathBuf {
         self.root.join(THUMBNAIL_FILE)

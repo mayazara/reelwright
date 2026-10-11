@@ -2,6 +2,7 @@
 //! project model, recorded in a [`History`].
 
 pub mod commands;
+pub mod timeline;
 
 use rw_model::Project;
 use std::fmt;

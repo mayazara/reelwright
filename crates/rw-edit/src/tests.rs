@@ -104,21 +104,9 @@ fn compound_rolls_back_on_failure() {
 fn used_media_cannot_be_removed() {
     let mut p = project_with_media(1);
     let id = p.media[0].id;
-    p.tracks.push(Track {
-        id: TrackId::new(),
-        kind: TrackKind::Video,
-        locked: false,
-        hidden: false,
-        muted: false,
-        items: vec![Item {
-            id: ItemId::new(),
-            start: Time::ZERO,
-            duration: Time::from_secs(1),
-            source_in: Time::ZERO,
-            kind: ItemKind::Media { media: id },
-            group: None,
-        }],
-    });
+    let mut track = Track::new_main();
+    track.items.push(Item::new(&p.media[0], Time::ZERO));
+    p.tracks.push(track);
     let mut h = History::new();
     assert!(h.execute(&mut p, Box::new(RemoveMedia::new(id))).is_err());
 }

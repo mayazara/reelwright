@@ -91,9 +91,11 @@ fn thumbnails_fit_and_respect_rotation() {
             f.name
         );
         // testsrc2 is colourful: a black or flat thumbnail means a decode bug.
+        // A few fixtures are flat on purpose.
         let distinct: std::collections::BTreeSet<_> =
             img.pixels.chunks(4).map(|p| [p[0], p[1], p[2]]).collect();
-        if f.name != "still_alpha.png" {
+        let flat_by_design = ["still_alpha.png", "frames_gray_h264.mp4"];
+        if !flat_by_design.contains(&f.name) {
             assert!(distinct.len() > 8, "{}: thumbnail looks blank", f.name);
         }
     }
