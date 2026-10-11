@@ -24,10 +24,19 @@ runs:
     - name: Windows
       if: runner.os == 'Windows'
       shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
+        # BtbN's rolling release drops old versions, so pick the newest 8.x
+        # LGPL shared build rather than hard-coding a file name. FFmpeg 9 is
+        # skipped until the Rust bindings support it.
+        $assets = gh release view latest -R BtbN/FFmpeg-Builds --json assets --jq '.assets[].name'
+        $name = $assets | Where-Object { $_ -match '^ffmpeg-n8\.\d+-latest-win64-lgpl-shared-8\.\d+\.zip$' } |
+          Sort-Object { [version]($_ -replace '^ffmpeg-n(8\.\d+)-.*$', '$1') } | Select-Object -Last 1
+        if (-not $name) { throw "No FFmpeg 8.x LGPL shared build found. Assets: $($assets -join ', ')" }
+        Write-Host "Using $name"
         $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
-        $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.0-latest-win64-lgpl-shared-8.0.zip"
-        Invoke-WebRequest -Uri $url -OutFile $zip
+        gh release download latest -R BtbN/FFmpeg-Builds -p $name -O $zip
         Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg"
         $dir = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName
         "FFMPEG_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
