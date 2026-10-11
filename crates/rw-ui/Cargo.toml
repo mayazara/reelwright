@@ -9,11 +9,21 @@ publish.workspace = true
 
 [dependencies]
 rw-model.workspace = true
+rw-edit.workspace = true
+rw-media.workspace = true
+rw-cache.workspace = true
+rw-engine.workspace = true
 eframe.workspace = true
 egui_dock.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rfd.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 egui_kittest.workspace = true
+rw-media = { workspace = true, features = ["fixtures"] }
+tempfile.workspace = true
 
 [lints]
 workspace = true

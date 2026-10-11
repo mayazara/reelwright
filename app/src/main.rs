@@ -4,9 +4,25 @@ use anyhow::Context as _;
 use rw_model::app;
 use std::path::PathBuf;
 
-fn log_dir() -> Option<PathBuf> {
+fn dirs() -> Option<directories::ProjectDirs> {
     directories::ProjectDirs::from(app::QUALIFIER, app::ORGANIZATION, app::ID)
-        .map(|dirs| dirs.data_local_dir().join("logs"))
+}
+
+fn log_dir() -> Option<PathBuf> {
+    dirs().map(|d| d.data_local_dir().join("logs"))
+}
+
+/// Projects live in the user's Videos folder so they are easy to find and
+/// back up; the app data folder is the fallback.
+fn config() -> anyhow::Result<rw_ui::Config> {
+    let dirs = dirs().context("could not determine the home directory")?;
+    let projects_dir = directories::UserDirs::new()
+        .and_then(|u| u.video_dir().map(|v| v.join(app::NAME)))
+        .unwrap_or_else(|| dirs.data_dir().join("Projects"));
+    Ok(rw_ui::Config {
+        projects_dir,
+        settings_file: dirs.config_dir().join("settings.json"),
+    })
 }
 
 /// Logs go to a local file only; nothing ever leaves the machine.
@@ -66,6 +82,8 @@ fn main() -> anyhow::Result<()> {
     let _log_guard = init_logging();
     tracing::info!(version = app::VERSION, "starting {}", app::NAME);
 
+    let config = config()?;
+    tracing::info!(projects = %config.projects_dir.display(), "using projects folder");
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title(app::NAME)
@@ -78,7 +96,7 @@ fn main() -> anyhow::Result<()> {
     eframe::run_native(
         app::NAME,
         options,
-        Box::new(|cc| Ok(Box::new(rw_ui::App::new(cc)))),
+        Box::new(move |cc| Ok(Box::new(rw_ui::App::new(cc, config)))),
     )
     .map_err(|e| anyhow::anyhow!("{e}"))
     .context("UI exited with an error")

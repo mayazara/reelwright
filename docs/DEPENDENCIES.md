@@ -15,14 +15,23 @@ Every third-party crate used directly by a workspace member, pinned with `=x.y.z
 | tracing | 0.1.44 | MIT | app | Structured logging | M0 |
 | tracing-subscriber | 0.3.23 | MIT | app | Log output (local file only) | M0 |
 | directories | 6.0.0 | MIT OR Apache-2.0 | app | Platform data/config directories | M0 |
-| serde | 1.0.229 | MIT OR Apache-2.0 | — (pinned for M1) | Serialisation | M0 |
-| serde_json | 1.0.152 | MIT OR Apache-2.0 | — (pinned for M1) | Project file format | M0 |
+| serde | 1.0.229 | MIT OR Apache-2.0 | rw-model, rw-ui | Serialisation | M0 |
+| serde_json | 1.0.152 | MIT OR Apache-2.0 | rw-model, rw-ui | Project file and settings format | M0 |
+| uuid | 1.28.0 | Apache-2.0 OR MIT | rw-model | Random ids for projects, media, tracks, items | M1 |
+| blake3 | 1.8.7 | CC0-1.0 OR Apache-2.0 | rw-model | Media content fingerprint for relinking and cache keys | M1 |
+| ffmpeg-next | 9.0.0 | WTFPL (exception in `deny.toml`) | rw-media | FFmpeg bindings: probe, decode, encode, mux | M1 |
+| ffmpeg-sys-next | 9.0.1 | WTFPL (exception in `deny.toml`) | rw-media (via ffmpeg-next) | Raw FFmpeg FFI for display matrix and pixel-format flags | M1 |
+| image | 0.25.10 | MIT OR Apache-2.0 | rw-media | PNG read/write for cached thumbnails (`png` feature only) | M1 |
+| rfd | 0.17.2 | MIT | rw-ui | Native open-file and folder dialogs | M1 |
+| crossbeam-channel | 0.5.17 | MIT OR Apache-2.0 | rw-engine | Job queues and result channels | M1 |
+| proptest | 1.12.0 | MIT OR Apache-2.0 | rw-model, rw-edit (dev) | Property tests for time maths and undo/redo | M1 |
+| tempfile | 3.27.0 | MIT OR Apache-2.0 | several (dev) | Temporary folders in tests | M1 |
 
 ## Native libraries
 
 | Library | Version | Licence | Linking | Notes |
 | --- | --- | --- | --- | --- |
-| FFmpeg | 8.0.1 (planned, M1) | LGPL-2.1+ | Shared, replaceable | Built by `scripts/ffmpeg/build-*.sh` with no GPL/nonfree components |
+| FFmpeg | 6.1–8.x at build time; 8.0.1 for releases | LGPL-2.1+ | Shared, replaceable | Release builds use `scripts/ffmpeg/build-*.sh` (no GPL/nonfree components). Dev machines and Linux/macOS CI use the distro/Homebrew build, which is GPL but never shipped. Windows CI uses an LGPL shared build. |
 
 ## Bundled assets
 
@@ -33,3 +42,4 @@ See `assets/ATTRIBUTION.md`. M0 adds the Inter UI font (OFL-1.1) and the origina
 | Tool | Licence | Purpose |
 | --- | --- | --- |
 | cargo-deny | MIT OR Apache-2.0 | Licence, ban and source checks |
+| ffmpeg CLI | LGPL/GPL (not shipped) | Generates synthetic test fixtures (`rw-media` `fixtures` feature) |

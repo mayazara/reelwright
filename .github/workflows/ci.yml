@@ -38,33 +38,40 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          # The media matrix has 21 fixtures; one needs FFmpeg 7+ to write a
+          # display matrix, so older runner FFmpeg builds may make 20.
+          - os: ubuntu-latest
+            min_fixtures: 20
+          - os: macos-latest
+            min_fixtures: 20
+          # The LGPL Windows build has no x265, so HEVC fixtures may skip.
+          - os: windows-latest
+            min_fixtures: 17
     runs-on: ${{ matrix.os }}
+    env:
+      RW_MIN_FIXTURES: ${{ matrix.min_fixtures }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Linux system packages
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config clang libclang-dev mesa-vulkan-drivers \
-            libxkbcommon-dev libwayland-dev
+      - uses: ./.github/actions/ffmpeg
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
   offline:
     needs: build-test
     runs-on: ubuntu-latest
+    env:
+      RW_MIN_FIXTURES: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/ffmpeg
       - run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config clang libclang-dev mesa-vulkan-drivers
           # Ubuntu 24.04+ restricts unprivileged user namespaces by default.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - run: cargo fetch && cargo test --workspace --no-run

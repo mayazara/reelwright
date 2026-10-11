@@ -1,0 +1,35 @@
+name: Install FFmpeg
+description: >
+  FFmpeg development libraries, the ffmpeg CLI (for test fixtures) and
+  libclang (for the bindings). Linux and macOS use the distro/Homebrew build,
+  which is fine for testing; release builds use scripts/ffmpeg/. Windows uses
+  an LGPL shared build.
+runs:
+  using: composite
+  steps:
+    - name: Linux
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config clang libclang-dev mesa-vulkan-drivers \
+          libxkbcommon-dev libwayland-dev ffmpeg \
+          libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
+          libswresample-dev libavfilter-dev libavdevice-dev
+    - name: macOS
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        brew install ffmpeg pkg-config
+    - name: Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
+        $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.0-latest-win64-lgpl-shared-8.0.zip"
+        Invoke-WebRequest -Uri $url -OutFile $zip
+        Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg"
+        $dir = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName
+        "FFMPEG_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "$dir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append

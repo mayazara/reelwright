@@ -1,6 +1,6 @@
 [package]
 name = "rw-engine"
-description = "Playback clock, A/V sync, preview scheduler and export job runner."
+description = "Playback clock, A/V sync, preview scheduler, background jobs and export runner."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,16 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+rw-model.workspace = true
+rw-media.workspace = true
+rw-cache.workspace = true
+crossbeam-channel.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+rw-edit.workspace = true
+rw-media = { workspace = true, features = ["fixtures"] }
+tempfile.workspace = true
 
 [lints]
 workspace = true

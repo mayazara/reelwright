@@ -1,3 +1,10 @@
-//! Playback clock, A/V sync, preview scheduler and export job runner.
+//! Playback clock, A/V sync, preview scheduler, background jobs and export
+//! job runner.
 //!
-//! Scaffolded in M0; implementation lands in a later milestone (see `PLAN.md`).
+//! M1 provides the import pipeline and background media jobs; playback and
+//! export arrive in M2.
+
+pub mod import;
+pub mod jobs;
+
+pub use jobs::{MediaEvent, MediaJobs, Waker};

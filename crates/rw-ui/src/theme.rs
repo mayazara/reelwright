@@ -135,9 +135,17 @@ pub fn visuals(mode: ThemeMode) -> egui::Visuals {
     v
 }
 
-/// Applies the theme to a context.
+/// Installs both palettes and selects `mode`. The change shows from the
+/// next frame (a `Ui` keeps the style it started the frame with), so a
+/// repaint is requested.
 pub fn apply(ctx: &egui::Context, mode: ThemeMode) {
-    ctx.set_visuals(visuals(mode));
+    ctx.set_visuals_of(egui::Theme::Dark, visuals(ThemeMode::Dark));
+    ctx.set_visuals_of(egui::Theme::Light, visuals(ThemeMode::Light));
+    ctx.set_theme(match mode {
+        ThemeMode::Dark => egui::Theme::Dark,
+        ThemeMode::Light => egui::Theme::Light,
+    });
+    ctx.request_repaint();
 }
 
 const INTER_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/ui/Inter-Regular.ttf");

@@ -1,7 +1,19 @@
 //! Project model: project, tracks, items, keyframes, serde schema and migrations.
 //!
-//! The data types land in M1 (see `PLAN.md`). For now this crate owns the
-//! product identity so the name lives in exactly one place.
+//! Everything here is plain data. Changes go through `rw-edit` commands so
+//! they can be undone; I/O is limited to reading and writing project folders.
+
+pub mod file;
+pub mod ids;
+pub mod library;
+pub mod media;
+pub mod project;
+pub mod time;
+
+pub use ids::{GroupId, ItemId, MarkerId, MediaId, ProjectId, TrackId};
+pub use media::{AudioInfo, ContentHash, MediaInfo, MediaKind, MediaRef, VideoInfo};
+pub use project::{AspectPreset, Canvas, Item, ItemKind, Marker, Project, Rgba, Track, TrackKind};
+pub use time::{FrameRate, TICKS_PER_SECOND, Time};
 
 /// Product identity. The name is a placeholder; changing it here renames the app.
 pub mod app {
