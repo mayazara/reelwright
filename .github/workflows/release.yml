@@ -23,7 +23,44 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: release
-      - uses: ./.github/actions/ffmpeg
+      # Our own trimmed LGPL FFmpeg (see scripts/ffmpeg/), cached until the
+      # build scripts change.
+      - name: Cache FFmpeg
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/ffmpeg/build/win64
+          key: ffmpeg-win64-${{ hashFiles('scripts/ffmpeg/common.sh', 'scripts/ffmpeg/build-windows.sh') }}
+      - uses: msys2/setup-msys2@v2
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make diffutils
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-nasm mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-dav1d mingw-w64-ucrt-x86_64-openh264
+            mingw-w64-ucrt-x86_64-libvpx mingw-w64-ucrt-x86_64-lame mingw-w64-ucrt-x86_64-opus
+            mingw-w64-ucrt-x86_64-ffnvcodec-headers mingw-w64-ucrt-x86_64-amf-headers
+            mingw-w64-ucrt-x86_64-libvpl
+      - name: Build FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: PREFIX="$(pwd)/third_party/ffmpeg/build/win64" scripts/ffmpeg/build-windows.sh
+      - name: Import libraries for the MSVC build
+        shell: pwsh
+        run: |
+          $prefix = Resolve-Path third_party\ffmpeg\build\win64
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $lib = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter lib.exe | Where-Object FullName -like '*Hostx64\x64*' | Select-Object -First 1
+          foreach ($def in Get-ChildItem "$prefix\lib\*.def") {
+            $name = ($def.BaseName -replace '-\d+$', '')
+            & $lib.FullName /nologo /machine:x64 "/def:$($def.FullName)" "/out:$prefix\lib\$name.lib"
+            if ($LASTEXITCODE -ne 0) { throw "lib.exe failed for $def" }
+          }
+          Get-ChildItem "$prefix\bin", "$prefix\lib" | Format-Table Name, Length
+          "FFMPEG_DIR=$prefix" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Version
         id: version

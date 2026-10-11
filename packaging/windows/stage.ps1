@@ -18,16 +18,16 @@ Copy-Item "$root\LICENSE-MIT", "$root\LICENSE-APACHE" $lic
 Copy-Item "$root\assets\fonts\ui\Inter-OFL.txt" $lic
 if (Test-Path "$root\THIRD_PARTY_LICENSES.html") { Copy-Item "$root\THIRD_PARTY_LICENSES.html" $lic }
 $ff = New-Item -ItemType Directory -Force -Path "$lic\FFmpeg"
-Get-ChildItem "$FfmpegDir\LICENSE*" -ErrorAction SilentlyContinue | Copy-Item -Destination $ff
+# Licence text and exact configure line, written by scripts/ffmpeg.
+Get-ChildItem "$FfmpegDir\share\licenses\ffmpeg\*" -ErrorAction SilentlyContinue | Copy-Item -Destination $ff
 @"
 FFmpeg is used under the GNU Lesser General Public License v2.1 (LGPL build:
 no GPL or non-free components). Its DLLs in this folder can be replaced
-with any compatible FFmpeg build.
+with any compatible FFmpeg build of the same major version.
 
-Build used: $(Split-Path $FfmpegDir -Leaf)
-Built by:   https://github.com/BtbN/FFmpeg-Builds (build scripts and exact
-            source references are published there)
-Source:     https://ffmpeg.org/download.html
+Built from the official source release listed in CONFIGURATION.txt
+(https://ffmpeg.org/releases/) by scripts/ffmpeg/build-windows.sh in the
+Reelwright source repository, with the configure options shown there.
 "@ | Set-Content "$ff\SOURCE.txt"
 
 @"

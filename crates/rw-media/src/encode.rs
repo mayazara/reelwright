@@ -9,16 +9,19 @@ use ffmpeg_next as ff;
 use rw_model::FrameRate;
 use std::path::{Path, PathBuf};
 
-/// H.264 encoders to try, in order. OpenH264 and OS/hardware encoders ship
-/// with LGPL FFmpeg builds; libx264 only exists in GPL developer builds. The
-/// MPEG-4 Part 2 encoder is built into FFmpeg and always available.
+/// H.264 encoders to try, in order. Platform encoders come first, then GPU
+/// vendors' encoders: their H.264 licensing is covered by the OS or the
+/// hardware vendor. OpenH264 is the software fallback (e.g. Windows "N"
+/// editions without Media Foundation); libx264 only exists in GPL developer
+/// builds of FFmpeg. FFmpeg's built-in MPEG-4 Part 2 encoder is the last
+/// resort.
 pub const H264_ENCODERS: &[&str] = &[
-    "libopenh264",
     "h264_videotoolbox",
+    "h264_mf",
     "h264_nvenc",
     "h264_qsv",
     "h264_amf",
-    "h264_mf",
+    "libopenh264",
     "libx264",
 ];
 const FALLBACK_ENCODER: &str = "mpeg4";
