@@ -33,3 +33,5 @@ Every file under `assets/` has exactly one row here (enforced by a test in `rw-a
 | `luts/neon.cube` | original | MIT OR Apache-2.0 | Reelwright contributors |
 | `luts/moonlight.cube` | original | MIT OR Apache-2.0 | Reelwright contributors |
 | `luts/rose.cube` | original | MIT OR Apache-2.0 | Reelwright contributors |
+| `branding/icon-256.png` | original (rendered from logo.svg shapes by rw-assets/examples/make_icons.rs) | MIT OR Apache-2.0 | Reelwright contributors |
+| `branding/reelwright.ico` | original (rendered from logo.svg shapes by rw-assets/examples/make_icons.rs) | MIT OR Apache-2.0 | Reelwright contributors |

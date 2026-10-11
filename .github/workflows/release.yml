@@ -1,0 +1,114 @@
+name: Release
+
+# Builds the Windows downloads: a one-click per-user installer and a
+# portable zip. Runs on version tags (publishing a draft GitHub release)
+# and on demand (artifacts only).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+      - uses: ./.github/actions/ffmpeg
+
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          v=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF#refs/tags/v}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        # Set explicitly: an environment RUSTFLAGS would override .cargo/config.toml.
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: cargo build --release -p reelwright
+
+      - name: No Visual C++ runtime dependency
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object FullName -like '*Hostx64\x64*' | Select-Object -First 1
+          $deps = & $dumpbin.FullName /dependents target\release\reelwright.exe
+          $deps
+          if ($deps -match 'VCRUNTIME|MSVCP|api-ms-win-crt') { throw "exe depends on the Visual C++ runtime" }
+
+      - name: Third-party licence notices
+        shell: bash
+        run: |
+          cargo install cargo-about --locked --version 0.9.2 --features cli
+          cargo about generate -c packaging/about.toml packaging/about.hbs -o THIRD_PARTY_LICENSES.html
+
+      - name: Stage portable folder
+        shell: pwsh
+        run: packaging/windows/stage.ps1 -FfmpegDir $env:FFMPEG_DIR -Out dist\Reelwright
+
+      - name: Self-test the portable build without FFmpeg on PATH
+        shell: pwsh
+        run: |
+          # Only the DLLs shipped next to the exe may be used.
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike "*ffmpeg*" }) -join ';'
+          $p = Start-Process dist\Reelwright\Reelwright.exe -ArgumentList '--self-test', "$PWD\self-test.txt" -Wait -PassThru
+          Get-Content self-test.txt
+          if ($p.ExitCode -ne 0) { throw "self-test failed ($($p.ExitCode))" }
+
+      - name: Portable zip
+        shell: pwsh
+        run: Compress-Archive -Path dist\Reelwright -DestinationPath "dist\Reelwright-${{ steps.version.outputs.version }}-windows-x64-portable.zip"
+
+      - name: Installer
+        shell: pwsh
+        run: |
+          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path $nsis)) { choco install nsis -y --no-progress; $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe" }
+          & $nsis /V2 "/DVERSION=${{ steps.version.outputs.version }}" "/DSRC=$PWD\dist\Reelwright" "/DICON=$PWD\assets\branding\reelwright.ico" "/DOUTFILE=$PWD\dist\Reelwright-${{ steps.version.outputs.version }}-windows-x64-setup.exe" packaging\windows\installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed" }
+
+      - name: Install silently, self-test, uninstall
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\*-setup.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList '/S' -Wait
+          $exe = "$env:LOCALAPPDATA\Programs\Reelwright\Reelwright.exe"
+          if (-not (Test-Path $exe)) { throw "not installed to $exe" }
+          if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Reelwright.lnk")) { throw "no Start menu shortcut" }
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike "*ffmpeg*" }) -join ';'
+          $p = Start-Process $exe -ArgumentList '--self-test', "$PWD\installed-self-test.txt" -Wait -PassThru
+          Get-Content installed-self-test.txt
+          if ($p.ExitCode -ne 0) { throw "installed self-test failed" }
+          Start-Process "$env:LOCALAPPDATA\Programs\Reelwright\Uninstall.exe" -ArgumentList '/S' -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path $exe) { throw "uninstall left the exe behind" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reelwright-windows-${{ steps.version.outputs.version }}
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+            self-test.txt
+
+      - name: Draft GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --title "Reelwright $GITHUB_REF_NAME" \
+            --notes-file packaging/windows/RELEASE_NOTES.md \
+            dist/*-setup.exe dist/*.zip

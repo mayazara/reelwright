@@ -1,5 +1,11 @@
 //! Application entry point: sets up local logging and starts the UI.
 
+// No console window behind the app on Windows (release builds).
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod adapter;
+mod self_test;
+
 use anyhow::Context as _;
 use rw_model::app;
 use std::path::PathBuf;
@@ -78,19 +84,66 @@ mod tracing_appender_guard {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+const ICON_PNG: &[u8] = include_bytes!("../../assets/branding/icon-256.png");
+
+fn window_icon() -> Option<eframe::egui::IconData> {
+    let img = image::load_from_memory(ICON_PNG).ok()?.into_rgba8();
+    let (width, height) = img.dimensions();
+    Some(eframe::egui::IconData {
+        rgba: img.into_raw(),
+        width,
+        height,
+    })
+}
+
+/// Tells the user something went wrong when there's no console to print to.
+fn show_error(message: &str) {
+    let log = log_dir()
+        .map(|d| d.display().to_string())
+        .unwrap_or_default();
+    rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title(app::NAME)
+        .set_description(format!(
+            "{} couldn't start.\n\n{message}\n\nDetails are in the log folder:\n{log}",
+            app::NAME
+        ))
+        .show();
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--self-test") {
+        let report = args
+            .get(i + 1)
+            .map_or_else(|| PathBuf::from("self-test.txt"), PathBuf::from);
+        std::process::exit(if self_test::run(&report) { 0 } else { 1 });
+    }
+    if let Err(e) = run() {
+        tracing::error!(error = %format!("{e:#}"), "startup failed");
+        show_error(&format!("{e:#}"));
+        std::process::exit(1);
+    }
+}
+
+fn run() -> anyhow::Result<()> {
     let _log_guard = init_logging();
     tracing::info!(version = app::VERSION, "starting {}", app::NAME);
 
     let config = config()?;
     tracing::info!(projects = %config.projects_dir.display(), "using projects folder");
+    let mut viewport = eframe::egui::ViewportBuilder::default()
+        .with_title(app::NAME)
+        .with_app_id(app::ID)
+        .with_inner_size([1440.0, 900.0])
+        .with_min_inner_size([960.0, 600.0]);
+    if let Some(icon) = window_icon() {
+        viewport = viewport.with_icon(icon);
+    }
     let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_title(app::NAME)
-            .with_app_id(app::ID)
-            .with_inner_size([1440.0, 900.0])
-            .with_min_inner_size([960.0, 600.0]),
+        viewport,
         renderer: eframe::Renderer::Wgpu,
+        wgpu_options: adapter::wgpu_options(),
         ..Default::default()
     };
     eframe::run_native(

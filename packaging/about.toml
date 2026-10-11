@@ -1,0 +1,10 @@
+# cargo-about configuration: licences allowed in shipped builds (mirrors
+# deny.toml).
+accepted = [
+  "MIT", "MIT-0", "Apache-2.0", "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause", "BSD-3-Clause", "Zlib", "MPL-2.0", "ISC",
+  "Unicode-3.0", "BSL-1.0", "CC0-1.0", "OFL-1.1", "WTFPL",
+]
+targets = ["x86_64-pc-windows-msvc"]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true

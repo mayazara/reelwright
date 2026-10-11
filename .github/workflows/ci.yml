@@ -43,13 +43,16 @@ jobs:
           # display matrix, so older runner FFmpeg builds may make 20.
           - os: ubuntu-latest
             min_fixtures: 20
-            # Software Vulkan (lavapipe) is installed, so GPU tests must run.
+            # Software Vulkan (lavapipe) is installed.
             require_gpu: '1'
           - os: macos-latest
             min_fixtures: 20
+            require_gpu: '1'
           # The LGPL Windows build has no x265, so HEVC fixtures may skip.
           - os: windows-latest
             min_fixtures: 17
+            # WARP (Windows' software renderer) is always present.
+            require_gpu: '1'
     runs-on: ${{ matrix.os }}
     env:
       RW_MIN_FIXTURES: ${{ matrix.min_fixtures }}

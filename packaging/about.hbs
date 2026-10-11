@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Third-party licences</title>
+<style>body{font-family:system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em}pre{white-space:pre-wrap;background:#f4f4f4;padding:1em}</style>
+</head><body>
+<h1>Third-party licences</h1>
+<p>This program uses the following open-source components. FFmpeg (LGPL-2.1) is
+shipped as separate DLLs; see <code>licenses/FFmpeg</code>.</p>
+<h2>Overview</h2>
+<ul>{{#each overview}}<li>{{name}} ({{count}})</li>{{/each}}</ul>
+{{#each licenses}}
+<h2 id="{{id}}">{{name}}</h2>
+<p>Used by:</p>
+<ul>{{#each used_by}}<li>{{crate.name}} {{crate.version}}</li>{{/each}}</ul>
+<pre>{{text}}</pre>
+{{/each}}
+</body></html>

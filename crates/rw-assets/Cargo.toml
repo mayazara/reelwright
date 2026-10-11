@@ -10,5 +10,8 @@ publish.workspace = true
 [dependencies]
 thiserror.workspace = true
 
+[dev-dependencies]
+image.workspace = true
+
 [lints]
 workspace = true

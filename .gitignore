@@ -3,3 +3,4 @@
 /third_party/ffmpeg/build
 /third_party/ffmpeg/src
 *.rwproj.bak
+THIRD_PARTY_LICENSES.html

@@ -15,11 +15,18 @@ path = "src/main.rs"
 rw-model.workspace = true
 rw-ui.workspace = true
 rw-audio.workspace = true
+rw-media.workspace = true
+rw-render.workspace = true
+image.workspace = true
+rfd.workspace = true
 eframe.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 directories.workspace = true
+
+[build-dependencies]
+winresource.workspace = true
 
 [lints]
 workspace = true
