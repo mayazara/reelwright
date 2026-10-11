@@ -1,0 +1,13 @@
+[package]
+name = "rw-media"
+description = "Media I/O behind the MediaIo trait: probe, decode, encode, mux, proxies, thumbnails, waveforms."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

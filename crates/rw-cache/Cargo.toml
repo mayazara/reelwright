@@ -1,0 +1,13 @@
+[package]
+name = "rw-cache"
+description = "Frame cache (GPU + CPU LRU) and on-disk proxy and peak files."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

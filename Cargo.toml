@@ -1,0 +1,48 @@
+[workspace]
+resolver = "3"
+members = ["app", "crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+# Internal crates
+rw-model = { path = "crates/rw-model" }
+rw-edit = { path = "crates/rw-edit" }
+rw-media = { path = "crates/rw-media" }
+rw-cache = { path = "crates/rw-cache" }
+rw-render = { path = "crates/rw-render" }
+rw-fx = { path = "crates/rw-fx" }
+rw-text = { path = "crates/rw-text" }
+rw-audio = { path = "crates/rw-audio" }
+rw-engine = { path = "crates/rw-engine" }
+rw-capture = { path = "crates/rw-capture" }
+rw-ai = { path = "crates/rw-ai" }
+rw-assets = { path = "crates/rw-assets" }
+rw-ui = { path = "crates/rw-ui" }
+
+# Third party — exact pins; every entry is recorded in docs/DEPENDENCIES.md
+eframe = { version = "=0.36.2", default-features = false, features = ["accesskit", "wgpu", "wayland", "x11"] }
+egui = { version = "=0.36.2", default-features = false }
+egui_dock = "=0.21.1"
+egui_kittest = { version = "=0.36.2", features = ["eframe"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.152"
+thiserror = "=2.0.21"
+anyhow = "=1.0.104"
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
+directories = "=6.0.0"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+
+[profile.dev.package."*"]
+opt-level = 2

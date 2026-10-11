@@ -1,0 +1,13 @@
+[package]
+name = "rw-text"
+description = "Titles and captions: text layout and animation presets."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

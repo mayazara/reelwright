@@ -1,0 +1,13 @@
+[package]
+name = "rw-engine"
+description = "Playback clock, A/V sync, preview scheduler and export job runner."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

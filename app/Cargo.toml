@@ -1,0 +1,24 @@
+[package]
+name = "reelwright"
+description = "Offline desktop video editor."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "reelwright"
+path = "src/main.rs"
+
+[dependencies]
+rw-model.workspace = true
+rw-ui.workspace = true
+eframe.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+directories.workspace = true
+
+[lints]
+workspace = true
