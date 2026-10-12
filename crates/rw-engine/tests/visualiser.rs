@@ -7,8 +7,7 @@ use rw_engine::frames::FrameSource;
 use rw_engine::import::probe_file;
 use rw_media::Ffmpeg;
 use rw_model::{
-    Canvas, Generated, Item, Project, Rgba, Time, Track, TrackKind, VisualiserSpec,
-    VisualiserStyle,
+    Canvas, Generated, Item, Project, Rgba, Time, Track, TrackKind, VisualiserSpec, VisualiserStyle,
 };
 use rw_render::{Compositor, Gpu};
 use std::path::{Path, PathBuf};
@@ -61,7 +60,10 @@ fn render(gpu: &Gpu, p: &Project, at: Time) -> rw_media::RgbaImage {
 
 fn lit(img: &rw_media::RgbaImage) -> usize {
     // The amber of the visualiser, not the dark background.
-    img.pixels.chunks(4).filter(|p| p[0] > 150 && p[2] < 120).count()
+    img.pixels
+        .chunks(4)
+        .filter(|p| p[0] > 150 && p[2] < 120)
+        .count()
 }
 
 #[test]

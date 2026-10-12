@@ -283,49 +283,6 @@ pub fn shape(spec: &ShapeSpec, height: u32) -> Option<(u64, Arc<Raster>)> {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn alpha_at(r: &Raster, x: u32, y: u32) -> u8 {
-        r.pixels[((y * r.width + x) * 4 + 3) as usize]
-    }
-
-    #[test]
-    fn every_shape_draws_something_inside_its_box() {
-        for kind in ShapeKind::ALL {
-            let spec = ShapeSpec::new(kind);
-            let (_, r) = shape(&spec, 100).unwrap();
-            assert_eq!(r.height, 100, "{kind:?}");
-            assert_eq!(r.width, (100.0 * spec.aspect).round() as u32, "{kind:?}");
-            let inked = r.pixels.chunks(4).filter(|p| p[3] > 128).count();
-            assert!(inked > 200, "{kind:?} drew {inked} pixels");
-        }
-        // A circle's corner is empty and its middle full.
-        let (_, c) = shape(&ShapeSpec::new(ShapeKind::Ellipse), 100).unwrap();
-        assert_eq!(alpha_at(&c, 2, 2), 0);
-        assert_eq!(alpha_at(&c, 50, 50), 255);
-    }
-
-    #[test]
-    fn stickers_render_at_the_asked_height() {
-        let s = StickerRef {
-            pack: stickers::BUNDLED.into(),
-            id: stickers::bundled()[0].id.clone(),
-        };
-        let (k1, r) = sticker(&s, 128).unwrap();
-        assert_eq!(r.height, 128);
-        assert!(r.pixels.chunks(4).filter(|p| p[3] > 128).count() > 1000);
-        let (k2, _) = sticker(&s, 128).unwrap();
-        assert_eq!(k1, k2, "cached");
-        let missing = StickerRef {
-            pack: "nope".into(),
-            id: "x".into(),
-        };
-        assert!(sticker(&missing, 64).is_none());
-    }
-}
-
 /// Draws an audio visualiser `height` pixels tall from `bands` (0–1, low to
 /// high) and `wave` (−1–1). Not cached: it changes every frame.
 pub fn visualiser(
@@ -414,4 +371,47 @@ pub fn visualiser(
         wave.iter().map(|v| (v * 127.0) as i8).collect::<Vec<_>>(),
     ));
     Some((key, Arc::new(Raster::from_pixmap(pixmap))))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn alpha_at(r: &Raster, x: u32, y: u32) -> u8 {
+        r.pixels[((y * r.width + x) * 4 + 3) as usize]
+    }
+
+    #[test]
+    fn every_shape_draws_something_inside_its_box() {
+        for kind in ShapeKind::ALL {
+            let spec = ShapeSpec::new(kind);
+            let (_, r) = shape(&spec, 100).unwrap();
+            assert_eq!(r.height, 100, "{kind:?}");
+            assert_eq!(r.width, (100.0 * spec.aspect).round() as u32, "{kind:?}");
+            let inked = r.pixels.chunks(4).filter(|p| p[3] > 128).count();
+            assert!(inked > 200, "{kind:?} drew {inked} pixels");
+        }
+        // A circle's corner is empty and its middle full.
+        let (_, c) = shape(&ShapeSpec::new(ShapeKind::Ellipse), 100).unwrap();
+        assert_eq!(alpha_at(&c, 2, 2), 0);
+        assert_eq!(alpha_at(&c, 50, 50), 255);
+    }
+
+    #[test]
+    fn stickers_render_at_the_asked_height() {
+        let s = StickerRef {
+            pack: stickers::BUNDLED.into(),
+            id: stickers::bundled()[0].id.clone(),
+        };
+        let (k1, r) = sticker(&s, 128).unwrap();
+        assert_eq!(r.height, 128);
+        assert!(r.pixels.chunks(4).filter(|p| p[3] > 128).count() > 1000);
+        let (k2, _) = sticker(&s, 128).unwrap();
+        assert_eq!(k1, k2, "cached");
+        let missing = StickerRef {
+            pack: "nope".into(),
+            id: "x".into(),
+        };
+        assert!(sticker(&missing, 64).is_none());
+    }
 }
