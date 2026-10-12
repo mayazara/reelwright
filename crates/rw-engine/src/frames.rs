@@ -2,8 +2,11 @@
 
 use rw_cache::ProjectCache;
 use rw_media::{VideoFrame, VideoReader};
-use rw_model::{Fit, Generated, Item, ItemId, Look, MediaKind, MediaRef, Project, Time, TrackKind};
-use rw_render::{Layer, Source};
+use rw_model::{
+    Fit, Generated, Item, ItemId, Look, MediaKind, MediaRef, Project, Time, TrackKind,
+    TransitionKind,
+};
+use rw_render::{Layer, LayerTransition, Source};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
@@ -12,14 +15,72 @@ use std::sync::Arc;
 /// Readers idle for this many calls are closed.
 const IDLE_CALLS: u64 = 300;
 
-/// Items drawn at `t`, bottom-most first.
+/// Items drawn at `t`, bottom-most first (for a transition, the incoming
+/// clip).
 pub fn visible_items(project: &Project, t: Time) -> Vec<&Item> {
-    project
+    draws_at(project, t).into_iter().map(|d| d.item).collect()
+}
+
+/// What one track shows at a time: a clip, or a clip coming in through a
+/// transition from another.
+#[derive(Debug, Clone, Copy)]
+pub struct Draw<'a> {
+    pub item: &'a Item,
+    /// Time to show the item at: outside the item (inside a transition
+    /// window) it holds its first or last frame.
+    pub at: Time,
+    pub from: Option<Outgoing<'a>>,
+}
+
+/// The outgoing side of a transition.
+#[derive(Debug, Clone, Copy)]
+pub struct Outgoing<'a> {
+    pub item: &'a Item,
+    pub at: Time,
+    pub kind: TransitionKind,
+    pub progress: f32,
+}
+
+/// Clamps `t` into `item`, so a clip held past its edge shows its first or
+/// last frame.
+fn inside(item: &Item, t: Time) -> Time {
+    t.max(item.start).min(item.end() - Time(1))
+}
+
+/// What each visible track draws at `t`, bottom-most first.
+pub fn draws_at(project: &Project, t: Time) -> Vec<Draw<'_>> {
+    let mut out = Vec::new();
+    for track in project
         .tracks
         .iter()
         .filter(|tr| matches!(tr.kind, TrackKind::Video | TrackKind::Overlay) && !tr.hidden)
-        .filter_map(|tr| tr.item_at(t))
-        .collect()
+    {
+        let crossing = track.transitions.iter().find_map(|tr| {
+            let a = track.items.iter().find(|i| i.id == tr.a)?;
+            let b = track.items.iter().find(|i| i.id == tr.b)?;
+            let (s, e) = tr.window(a.end());
+            (s <= t && t < e).then_some((tr, a, b))
+        });
+        if let Some((tr, a, b)) = crossing {
+            out.push(Draw {
+                item: b,
+                at: inside(b, t),
+                from: Some(Outgoing {
+                    item: a,
+                    at: inside(a, t),
+                    kind: tr.kind,
+                    progress: tr.progress(a.end(), t),
+                }),
+            });
+        } else if let Some(item) = track.item_at(t) {
+            out.push(Draw {
+                item,
+                at: t,
+                from: None,
+            });
+        }
+    }
+    out
 }
 
 /// Decode size for `media` drawn into an output of `out`: the coded-orientation
@@ -158,10 +219,19 @@ impl FrameSource {
                 .and_then(|id| project.media(id))
                 .filter(|m| m.info.video.is_some())
         };
+        let draws = draws_at(project, t);
+        // Every picture needed: each draw's clip, then its outgoing clip.
+        let mut pictures: Vec<(&Item, Time)> = Vec::new();
+        for d in &draws {
+            pictures.push((d.item, d.at));
+            if let Some(f) = d.from {
+                pictures.push((f.item, f.at));
+            }
+        }
         let mut wants = Vec::new();
-        for (slot, item) in visible_items(project, t).into_iter().enumerate() {
+        for (slot, (item, at)) in pictures.iter().enumerate() {
             if let Some(m) = media_of(item) {
-                wants.push(self.want(Some(slot), item, m, item.source_time(t), out));
+                wants.push(self.want(Some(slot), item, m, item.source_time(*at), out));
             }
         }
         for track in project
@@ -176,8 +246,9 @@ impl FrameSource {
             {
                 if let Some(m) = media_of(item)
                     && self.readers.get(&item.id).is_none_or(|e| !e.opened)
+                    && !wants.iter().any(|w| w.item == item.id)
                 {
-                    wants.push(self.want(None, item, m, item.source_in, out));
+                    wants.push(self.want(None, item, m, item.source_time(item.start), out));
                 }
             }
         }
@@ -225,42 +296,59 @@ impl FrameSource {
                 ))
             })
             .collect();
-        // One layer per visible clip, bottom first, with its look; fades
-        // fold into opacity.
-        let mut layers: Vec<(usize, Layer)> = Vec::new();
-        for (slot, item) in visible_items(project, t).into_iter().enumerate() {
+        // One layer per picture with its look; fades fold into opacity.
+        let mut layer_for = |slot: usize| -> Option<Layer> {
+            let (item, at) = pictures[slot];
             let mut layer = match item.generated_fill() {
-                Some(Generated::Solid { color }) => Layer {
-                    source: Source::Solid(color),
-                    key: 0,
-                    rotation: 0,
-                    look: Look::default(),
-                    clip_time: 0.0,
-                    clip_progress: 0.0,
-                    transition: None,
-                },
-                Some(Generated::Gradient { from, to, angle }) => Layer {
-                    source: Source::Gradient { from, to, angle },
-                    key: 0,
-                    rotation: 0,
-                    look: Look::default(),
-                    clip_time: 0.0,
-                    clip_progress: 0.0,
-                    transition: None,
-                },
-                None => match decoded.remove(&slot) {
-                    Some(l) => l,
-                    None => continue,
-                },
+                Some(Generated::Solid { color }) => Layer::new(Source::Solid(color)),
+                Some(Generated::Gradient { from, to, angle }) => {
+                    Layer::new(Source::Gradient { from, to, angle })
+                }
+                None => decoded.remove(&slot)?,
             };
+            let local = at - item.start;
             layer.look = item.look.clone();
-            layer.look.opacity *= item.look.fade_at(t - item.start, item.duration);
-            if layer.look.opacity > 0.0 {
-                layers.push((slot, layer));
+            layer.look.opacity *= item.look.fade_at(local, item.duration);
+            layer.clip_time = local.as_secs_f64() as f32;
+            layer.clip_progress =
+                (local.as_secs_f64() / item.duration.as_secs_f64().max(1e-9)) as f32;
+            Some(layer)
+        };
+        let mut layers = Vec::new();
+        let mut slot = 0;
+        for d in &draws {
+            let incoming = layer_for(slot);
+            slot += 1;
+            let outgoing = d.from.map(|f| {
+                slot += 1;
+                (layer_for(slot - 1), f)
+            });
+            let layer = match (incoming, outgoing) {
+                (Some(mut layer), Some((Some(from), f))) => {
+                    layer.transition = Some(Box::new(LayerTransition {
+                        from,
+                        kind: f.kind,
+                        progress: f.progress,
+                    }));
+                    layer
+                }
+                // One side missing (still decoding, or a broken file): show
+                // whichever side there is.
+                (Some(layer), _) => layer,
+                (None, Some((Some(from), _))) => from,
+                (None, _) => continue,
+            };
+            let visible = layer.look.opacity > 0.0
+                || layer
+                    .transition
+                    .as_ref()
+                    .is_some_and(|tr| tr.from.look.opacity > 0.0);
+            if visible {
+                layers.push(layer);
             }
         }
         self.readers.retain(|_, e| calls - e.last_used < IDLE_CALLS);
-        layers.into_iter().map(|(_, l)| l).collect()
+        layers
     }
 
     /// Drops all readers (e.g. when proxies become available).
@@ -356,5 +444,45 @@ mod tests {
         p.tracks[1].hidden = false;
         assert_eq!(visible_items(&p, Time::from_millis(500)).len(), 2);
         assert!(visible_items(&p, Time::from_secs(2)).is_empty());
+    }
+
+    #[test]
+    fn transitions_cross_the_cut_with_held_frames() {
+        let m = video(64, 64, 0);
+        let mut p = Project::new("p", Canvas::default());
+        p.media.push(m.clone());
+        let mut main = Track::new_main();
+        let a = Item::new(&m, Time::ZERO);
+        let mut b = Item::new(&m, Time::from_secs(1));
+        b.source_in = Time::from_millis(200);
+        b.duration = Time::from_millis(800);
+        main.transitions.push(Transition {
+            id: TransitionId::new(),
+            a: a.id,
+            b: b.id,
+            kind: TransitionKind::Push,
+            duration: Time::from_millis(400),
+        });
+        let (a_id, b_id) = (a.id, b.id);
+        main.items = vec![a, b];
+        p.tracks = vec![main];
+
+        // Before the window: just the first clip.
+        let d = draws_at(&p, Time::from_millis(700));
+        assert!(d.len() == 1 && d[0].item.id == a_id && d[0].from.is_none());
+        // In the first half: the second clip holds its first frame.
+        let d = draws_at(&p, Time::from_millis(900));
+        let from = d[0].from.unwrap();
+        assert_eq!((d[0].item.id, from.item.id), (b_id, a_id));
+        assert_eq!(d[0].item.source_time(d[0].at), Time::from_millis(200));
+        assert_eq!(from.at, Time::from_millis(900));
+        assert!((from.progress - 0.25).abs() < 1e-6);
+        // In the second half: the first clip holds its last frame.
+        let d = draws_at(&p, Time::from_millis(1100));
+        let from = d[0].from.unwrap();
+        assert_eq!(from.at, Time::from_secs(1) - Time(1));
+        assert_eq!(d[0].at, Time::from_millis(1100));
+        // After the window: just the second clip.
+        assert!(draws_at(&p, Time::from_millis(1200))[0].from.is_none());
     }
 }
