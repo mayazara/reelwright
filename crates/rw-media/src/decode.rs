@@ -23,6 +23,10 @@ pub const CHANNELS: usize = 2;
 /// Seeking forward further than this is faster than decoding through.
 const SEEK_THRESHOLD: Time = Time::from_secs(2);
 
+/// Memory for recently decoded frames, so stepping or playing backwards
+/// decodes each group of pictures once instead of once per frame.
+const HISTORY_BYTES: usize = 192 << 20;
+
 /// A decoded picture and when it starts showing.
 #[derive(Debug, Clone)]
 pub struct VideoFrame {
@@ -68,6 +72,8 @@ pub struct VideoReader {
     still: bool,
     /// Nothing decoded or sought yet: the demuxer is at the start.
     fresh: bool,
+    /// Recently shown frames with their real durations, by start time.
+    history: std::collections::BTreeMap<Time, Arc<VideoFrame>>,
 }
 
 // SAFETY: FFmpeg's demuxer, decoder and scaler contexts have no thread
@@ -136,6 +142,7 @@ impl VideoReader {
             eof: false,
             still,
             fresh: true,
+            history: std::collections::BTreeMap::new(),
         })
     }
 
@@ -153,6 +160,7 @@ impl VideoReader {
         if size != self.out_size {
             self.out_size = size;
             self.scaler = None;
+            self.history.clear();
             if self.still {
                 // Re-decode the single frame at the new size.
                 self.current = None;
@@ -270,6 +278,12 @@ impl VideoReader {
             return Ok(self.current.clone().expect("set above"));
         }
         let t = t.max(Time::ZERO);
+        if !self.current.as_ref().is_some_and(|c| c.covers(t))
+            && let Some((_, f)) = self.history.range(..=t).next_back()
+            && f.covers(t)
+        {
+            return Ok(f.clone());
+        }
         let need_seek = match &self.current {
             Some(c) => t < c.pts || t > c.pts + SEEK_THRESHOLD,
             None => true,
@@ -287,7 +301,13 @@ impl VideoReader {
             }
             match self.decode_next()? {
                 Some(next) if next.pts <= t => {
-                    // Fix up the previous frame's real duration.
+                    // The previous frame ends where this one starts.
+                    if let Some(c) = self.current.take() {
+                        self.remember(Arc::new(VideoFrame {
+                            duration: next.pts - c.pts,
+                            ..(*c).clone()
+                        }));
+                    }
                     self.current = Some(next);
                 }
                 Some(next) => {
@@ -300,6 +320,7 @@ impl VideoReader {
                                 ..(*c).clone()
                             });
                             self.current = Some(fixed.clone());
+                            self.remember(fixed.clone());
                             self.pending = Some(next);
                             return Ok(fixed);
                         }
@@ -317,6 +338,26 @@ impl VideoReader {
                         .ok_or_else(|| MediaError::Decode("no frames decoded".into()));
                 }
             }
+        }
+    }
+}
+
+impl VideoReader {
+    /// Keeps `f` for later backward requests, dropping the frames furthest
+    /// from it when over budget.
+    fn remember(&mut self, f: Arc<VideoFrame>) {
+        if f.duration <= Time::ZERO {
+            return;
+        }
+        let bytes = f.image.pixels.len().max(1);
+        let cap = (HISTORY_BYTES / bytes).max(8);
+        let at = f.pts;
+        self.history.insert(at, f);
+        while self.history.len() > cap {
+            let first = *self.history.keys().next().expect("non-empty");
+            let last = *self.history.keys().next_back().expect("non-empty");
+            let drop = if at - first > last - at { first } else { last };
+            self.history.remove(&drop);
         }
     }
 }

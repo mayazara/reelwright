@@ -137,11 +137,14 @@ struct Want {
 }
 
 /// Opens and caches one reader per item and returns its picture at a time.
-/// The layers of a frame are decoded in parallel.
+/// The layers of a frame are decoded in parallel; clips about to start are
+/// opened on their own threads so they never hold up the current frame.
 pub struct FrameSource {
     cache: ProjectCache,
     prefer_proxies: bool,
     readers: HashMap<ItemId, Entry>,
+    /// Readers being opened and positioned in the background.
+    warming: HashMap<ItemId, std::sync::mpsc::Receiver<Entry>>,
     calls: u64,
 }
 
@@ -182,6 +185,7 @@ impl FrameSource {
             cache,
             prefer_proxies,
             readers: HashMap::new(),
+            warming: HashMap::new(),
             calls: 0,
         }
     }
@@ -228,12 +232,31 @@ impl FrameSource {
                 pictures.push((f.item, f.at));
             }
         }
+        // Collect readers that finished warming up.
+        let readers = &mut self.readers;
+        self.warming.retain(|id, rx| match rx.try_recv() {
+            Ok(entry) => {
+                readers.insert(*id, entry);
+                false
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => true,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => false,
+        });
         let mut wants = Vec::new();
         for (slot, (item, at)) in pictures.iter().enumerate() {
             if let Some(m) = media_of(item) {
                 wants.push(self.want(Some(slot), item, m, item.source_time(*at), out));
             }
         }
+        // A clip needed now that is still warming up: wait for it.
+        for w in &wants {
+            if let Some(rx) = self.warming.remove(&w.item)
+                && let Ok(entry) = rx.recv()
+            {
+                self.readers.insert(w.item, entry);
+            }
+        }
+        let mut warm = Vec::new();
         for track in project
             .tracks
             .iter()
@@ -246,10 +269,32 @@ impl FrameSource {
             {
                 if let Some(m) = media_of(item)
                     && self.readers.get(&item.id).is_none_or(|e| !e.opened)
+                    && !self.warming.contains_key(&item.id)
                     && !wants.iter().any(|w| w.item == item.id)
                 {
-                    wants.push(self.want(None, item, m, item.source_time(item.start), out));
+                    warm.push(self.want(None, item, m, item.source_time(item.start), out));
                 }
+            }
+        }
+        for w in warm {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let id = w.item;
+            self.warming.insert(id, rx);
+            let calls = self.calls;
+            let spawned = std::thread::Builder::new()
+                .name("decoder-warmup".into())
+                .spawn(move || {
+                    let mut entry = Entry {
+                        reader: None,
+                        opened: false,
+                        last_used: calls,
+                    };
+                    decode(&mut entry, &w);
+                    let _ = tx.send(entry);
+                });
+            if spawned.is_err() {
+                // Out of threads: it will open when needed instead.
+                self.warming.remove(&id);
             }
         }
 
@@ -351,6 +396,7 @@ impl FrameSource {
     /// Drops all readers (e.g. when proxies become available).
     pub fn reset(&mut self) {
         self.readers.clear();
+        self.warming.clear();
     }
 }
 

@@ -134,10 +134,22 @@ fn four_times_speed_raises_pitch_when_asked() {
     );
 }
 
-/// 1080p clips at 4× played in real time for `RW_SOAK_SECS` (default 4 s).
-/// `RW_PERF=1` enforces the < 1 % dropped-frame target (release build).
 #[test]
 fn four_times_speed_plays_smoothly() {
+    plays_smoothly(4.0, false);
+}
+
+/// Reversed long-GOP video decodes each group of pictures once, and the
+/// next clip's decoder warms up without holding up the current frame.
+#[test]
+fn reversed_clips_play_smoothly() {
+    plays_smoothly(1.0, true);
+}
+
+/// Back-to-back 1080p H.264 clips at `speed` played in real time for
+/// `RW_SOAK_SECS` (default 4 s). `RW_PERF=1` enforces the < 1 %
+/// dropped-frame target (release build).
+fn plays_smoothly(speed: f32, reverse: bool) {
     let g = common::fixtures();
     let clip = g.path("h264_1080p30_aac.mp4");
     if !clip.exists() {
@@ -151,11 +163,12 @@ fn four_times_speed_plays_smoothly() {
     let v = probe_file(&Ffmpeg::new(), &clip).unwrap();
     let mut p = Project::new("fast", Canvas::default());
     let mut main = Track::new_main();
-    // Back-to-back copies of the 2 s clip, each 0.5 s at 4×.
+    // Back-to-back copies of the 2 s clip.
     let mut at = Time::ZERO;
     while at < Time::from_secs(secs as i64 + 1) {
         let mut i = Item::new(&v, at);
-        i.speed = 4.0;
+        i.speed = speed;
+        i.reverse = reverse;
         i.duration = i.duration_for_span(i.duration);
         at += i.duration;
         main.items.push(i);
@@ -179,7 +192,8 @@ fn four_times_speed_plays_smoothly() {
     let expected = (end.as_secs_f64() * 30.0) as u64;
     let drop_rate = stats.dropped as f64 / expected.max(1) as f64;
     eprintln!(
-        "4x for {secs}s: shown {} dropped {} ({:.2}%), max lag {}, underrun samples {}",
+        "{speed}x{} for {secs}s: shown {} dropped {} ({:.2}%), max lag {}, underrun samples {}",
+        if reverse { " reversed" } else { "" },
         stats.shown,
         stats.dropped,
         drop_rate * 100.0,
