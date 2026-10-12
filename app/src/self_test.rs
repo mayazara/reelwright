@@ -79,6 +79,7 @@ fn checks(r: &mut String) -> bool {
             frame_rate: FrameRate::FPS_30,
             bit_rate: 1_000_000,
             encoder: None,
+            codec: Default::default(),
         };
         let mut w = Mp4Writer::create(&out, &video, Some(&AudioSettings { bit_rate: 128_000 }))
             .map_err(|e| e.to_string())?;
