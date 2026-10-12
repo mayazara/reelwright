@@ -326,6 +326,11 @@ impl EditorUi {
                     s.apply(EditorAction::AddTransition(kind));
                 }
             }
+            BinAction::AddToNewTrack(id) => {
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::AppendMediaNewTrack(id));
+                }
+            }
             BinAction::AddToTimeline(id) => {
                 if let Some(s) = self.session.as_mut() {
                     s.apply(EditorAction::AppendMedia(id));
@@ -674,14 +679,25 @@ impl EditorUi {
                         } else {
                             tokens.text_muted
                         };
-                        ui.label(RichText::new(s.status()).small().color(color));
+                        // Fixed widths: the status and counter change often
+                        // and shouldn't push their neighbours around.
+                        let small = egui::FontId::proportional(11.0);
+                        layout::steady_text(
+                            ui,
+                            &s.status(),
+                            "All changes saved",
+                            small.clone(),
+                            color,
+                        );
                         let busy = self.jobs.pending();
                         if busy > 0 {
                             ui.spinner();
-                            ui.label(
-                                RichText::new(format!("Preparing media ({busy})"))
-                                    .small()
-                                    .color(tokens.text_muted),
+                            layout::steady_text(
+                                ui,
+                                &format!("Preparing media ({busy})"),
+                                "Preparing media (000)",
+                                small,
+                                tokens.text_muted,
                             );
                         }
                     });

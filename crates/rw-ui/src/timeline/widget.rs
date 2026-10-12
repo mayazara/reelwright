@@ -34,6 +34,7 @@ const CUT_GRAB_PX: f32 = 40.0;
 const TRANSITION_HEIGHT: f32 = 20.0;
 
 pub const EMPTY_LABEL: &str = "Drag media here to start editing.";
+pub const NEW_TRACK_HINT: &str = "Drop a clip here to layer it on a new track";
 
 /// Waveform peaks loaded from the cache on demand.
 #[derive(Default)]
@@ -208,13 +209,12 @@ fn toolbar(
         {
             out.push(EditorAction::PlayPause);
         }
-        ui.label(
-            egui::RichText::new(crate::format::timecode(
-                ctx.playhead,
-                ctx.project.canvas.frame_rate,
-            ))
-            .monospace()
-            .color(ctx.tokens.text),
+        crate::layout::steady_text(
+            ui,
+            &crate::format::timecode(ctx.playhead, ctx.project.canvas.frame_rate),
+            "00:00:00:00",
+            FontId::proportional(14.0),
+            ctx.tokens.text,
         );
         ui.separator();
         if ui
@@ -432,6 +432,37 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
     }
     let pointer = ui.input(|i| i.pointer.hover_pos());
     let mut transition_hits: Vec<(TransitionId, Time, Rect)> = Vec::new();
+    // The strip above the tracks where a drop makes a new track. Always
+    // drawn, so nothing moves when a drag starts; it lights up while a clip
+    // is dragged over it.
+    {
+        let zone = Rect::from_min_size(
+            pos2(tracks.left(), tracks.top() - state.scroll_y),
+            vec2(tracks.width(), logic::NEW_TRACK_ZONE - logic::ROW_GAP),
+        );
+        let carrying = egui::DragAndDrop::has_payload_of_type::<MediaId>(ui.ctx())
+            || egui::DragAndDrop::has_payload_of_type::<rw_model::Generated>(ui.ctx())
+            || matches!(state.drag, Some(Drag::Move { .. }));
+        let over = carrying && pointer.is_some_and(|p| zone.contains(p));
+        body_painter.rect(
+            zone.shrink2(vec2(2.0, 3.0)),
+            CornerRadius::same(4),
+            if over {
+                t.accent.gamma_multiply(0.3)
+            } else {
+                Color32::TRANSPARENT
+            },
+            Stroke::new(1.0, if carrying { t.accent } else { t.border }),
+            StrokeKind::Inside,
+        );
+        body_painter.text(
+            pos2(zone.left() + 12.0, zone.center().y),
+            Align2::LEFT_CENTER,
+            NEW_TRACK_HINT,
+            FontId::proportional(11.0),
+            if carrying { t.text } else { t.text_muted },
+        );
+    }
     for r in &rows {
         let rr = row_rect(r);
         if rr.bottom() < tracks.top() || rr.top() > tracks.bottom() {
@@ -473,6 +504,8 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
             egui::Id::new(("track-header", track.id)),
             Sense::click(),
         );
+        let name = names[&r.track].clone();
+        header_resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &name));
         if header_resp.secondary_clicked() {
             state.context_track = Some(track.id);
         }
@@ -1258,6 +1291,42 @@ fn item_menu(
     if ui.button("Copy").clicked() {
         out.push(EditorAction::Copy);
         ui.close();
+    }
+    if let Some((ti, _)) = project.find_item(id) {
+        let track = &project.tracks[ti];
+        let visual = track.kind != TrackKind::Audio;
+        let label = if visual {
+            "Move to a new track above"
+        } else {
+            "Move to a new track below"
+        };
+        if ui
+            .add_enabled(!track.locked, egui::Button::new(label))
+            .clicked()
+        {
+            let index = if visual {
+                project
+                    .tracks
+                    .iter()
+                    .rposition(|t| t.kind != TrackKind::Audio)
+                    .map_or(0, |i| i + 1)
+            } else {
+                project.tracks.len()
+            };
+            out.push(EditorAction::Op(TimelineOp::Move {
+                items: vec![id],
+                delta: Time::ZERO,
+                to: Some(Placement::NewTrack {
+                    kind: if visual {
+                        TrackKind::Video
+                    } else {
+                        TrackKind::Audio
+                    },
+                    index,
+                }),
+            }));
+            ui.close();
+        }
     }
     let plays_source = item.held_frame().is_none()
         && media.is_some_and(|m| matches!(m.kind(), MediaKind::Video | MediaKind::Audio));

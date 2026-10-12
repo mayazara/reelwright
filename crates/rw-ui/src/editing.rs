@@ -283,6 +283,30 @@ impl Session {
                 }
             }
             EditorAction::AppendMedia(media) => self.append_media(media),
+            EditorAction::AppendMediaNewTrack(media) => {
+                let Some(m) = self.project.media(media) else {
+                    return;
+                };
+                let kind = track_kind_for(m.kind());
+                let row = if kind == TrackKind::Audio {
+                    DropRow::New {
+                        kind,
+                        index: self.project.tracks.len(),
+                    }
+                } else {
+                    let top = self
+                        .project
+                        .tracks
+                        .iter()
+                        .rposition(|t| t.kind != TrackKind::Audio);
+                    DropRow::New {
+                        kind: TrackKind::Video,
+                        index: top.map_or(0, |i| i + 1),
+                    }
+                };
+                let at = self.playhead();
+                self.apply(EditorAction::InsertMedia { media, row, at });
+            }
             EditorAction::AppendGenerated(fill) => {
                 let row = match self.project.tracks.iter().position(|t| t.main) {
                     Some(i) => DropRow::Track(i),

@@ -24,3 +24,49 @@ pub fn grid<T>(
         });
     }
 }
+
+/// Smallest width of a number box (drag fields and slider values), wide
+/// enough for "−60.0 dB" or "100 %", so values don't resize their box.
+pub const VALUE_BOX_WIDTH: f32 = 66.0;
+
+/// Text whose digits all take the width of the widest digit, in a box at
+/// least as wide as `widest` would be. Changing numbers (timecodes, counts)
+/// then never move what's next to them.
+pub fn steady_text(
+    ui: &mut egui::Ui,
+    text: &str,
+    widest: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+) -> egui::Response {
+    let (digit, widths): (f32, Vec<f32>) = ui.ctx().fonts_mut(|f| {
+        let digit = ('0'..='9')
+            .map(|c| f.glyph_width(&font, c))
+            .fold(0.0, f32::max);
+        let widths = text.chars().map(|c| f.glyph_width(&font, c)).collect();
+        (digit, widths)
+    });
+    let advance = |c: char, w: f32| if c.is_ascii_digit() { digit } else { w };
+    let measure = |s: &str| -> f32 {
+        ui.ctx()
+            .fonts_mut(|f| s.chars().map(|c| advance(c, f.glyph_width(&font, c))).sum())
+    };
+    let width = measure(text).max(measure(widest));
+    let height = ui.ctx().fonts_mut(|f| f.row_height(&font));
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    let painter = ui.painter_at(rect.expand(1.0));
+    let mut x = rect.left();
+    for (c, w) in text.chars().zip(widths) {
+        let cell = advance(c, w);
+        painter.text(
+            egui::pos2(x + cell / 2.0, rect.center().y),
+            egui::Align2::CENTER_CENTER,
+            c,
+            font.clone(),
+            color,
+        );
+        x += cell;
+    }
+    resp
+}

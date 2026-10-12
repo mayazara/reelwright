@@ -97,3 +97,63 @@ fn media_and_backgrounds_drop_onto_the_timeline() {
     drag(&mut h, from, ON_TIMELINE);
     assert_eq!(item_count(&h), 2, "background dropped on the timeline");
 }
+
+fn tracks(h: &Harness<'_, App>) -> Vec<(rw_model::TrackKind, bool, usize)> {
+    h.state()
+        .editor()
+        .session
+        .as_ref()
+        .unwrap()
+        .project
+        .tracks
+        .iter()
+        .map(|t| (t.kind, t.main, t.items.len()))
+        .collect()
+}
+
+#[test]
+fn new_tracks_from_the_strip_and_the_library_menu() {
+    use rw_model::TrackKind::Video;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut h = harness(tmp.path());
+    h.get_by_label("Backgrounds").click();
+    h.run_ok();
+    let teal = centre(&h, "Teal");
+    drag(&mut h, teal, ON_TIMELINE);
+    assert_eq!(tracks(&h), [(Video, true, 1)]);
+
+    // The strip sits just above the top track's row.
+    let main = h.get_by_label("Main").rect();
+    let strip = egui::pos2(ON_TIMELINE.x, main.top() - 14.0);
+    let coral = centre(&h, "Coral");
+    drag(&mut h, coral, strip);
+    assert_eq!(
+        tracks(&h),
+        [(Video, true, 1), (Video, false, 1)],
+        "dropped on a new track above"
+    );
+
+    // From the library's menu, on media.
+    let fx = rw_media::fixtures::ensure();
+    h.state_mut()
+        .editor_mut()
+        .import_paths(vec![fx.path("still.png")]);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while {
+        let ed = h.state().editor();
+        ed.session.as_ref().unwrap().importing() || ed.jobs().pending() > 0
+    } {
+        assert!(Instant::now() < deadline, "import timed out");
+        h.step();
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    h.get_by_label("Your media").click();
+    h.run_ok();
+    h.get_by_label("still.png").click_secondary();
+    h.run_ok();
+    h.get_by_label(rw_ui::media_bin::ADD_NEW_TRACK_LABEL)
+        .click();
+    h.run_ok();
+    assert_eq!(tracks(&h).len(), 3);
+    assert_eq!(tracks(&h)[2], (Video, false, 1), "on its own new top track");
+}

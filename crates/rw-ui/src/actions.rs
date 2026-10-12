@@ -35,6 +35,9 @@ pub enum EditorAction {
     },
     /// Add media at the playhead (bin double-click or "Add to timeline").
     AppendMedia(MediaId),
+    /// Add media at the playhead on a new track above the others (below
+    /// the others for sound).
+    AppendMediaNewTrack(MediaId),
     Export,
     AddMarker,
     /// Add a colour/gradient clip at the playhead on the main track.

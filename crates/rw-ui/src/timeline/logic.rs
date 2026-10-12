@@ -95,6 +95,8 @@ pub struct Row {
 pub const VIDEO_ROW_HEIGHT: f32 = 56.0;
 pub const AUDIO_ROW_HEIGHT: f32 = 44.0;
 pub const ROW_GAP: f32 = 4.0;
+/// Strip above the top track: dropping a clip there puts it on a new track.
+pub const NEW_TRACK_ZONE: f32 = 30.0;
 
 /// Screen order: overlay/video tracks top-down (last drawn on top first),
 /// then the main track, then audio tracks in list order.
@@ -105,7 +107,7 @@ pub fn rows(project: &Project) -> Vec<Row> {
     let audio: Vec<usize> = (0..project.tracks.len())
         .filter(|&i| project.tracks[i].kind == TrackKind::Audio)
         .collect();
-    let mut y = 0.0;
+    let mut y = NEW_TRACK_ZONE;
     let mut out = Vec::new();
     for &i in visual.iter().rev().chain(audio.iter()) {
         let t = &project.tracks[i];
@@ -490,7 +492,14 @@ mod tests {
             drop_row(&p, &r, r[0].y + 5.0, TrackKind::Video),
             DropRow::Track(1)
         );
-        // Above everything: new track on top of the visual stack.
+        // In the strip above the tracks: new track on top of the visual stack.
+        assert_eq!(
+            drop_row(&p, &r, NEW_TRACK_ZONE / 2.0, TrackKind::Video),
+            DropRow::New {
+                kind: TrackKind::Video,
+                index: 2
+            }
+        );
         assert_eq!(
             drop_row(&p, &r, -20.0, TrackKind::Video),
             DropRow::New {

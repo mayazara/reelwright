@@ -21,6 +21,7 @@ pub const MISSING_BADGE: &str = "Missing";
 pub const RENAME_LABEL: &str = "Rename…";
 pub const REMOVE_LABEL: &str = "Remove from project";
 pub const ADD_LABEL: &str = "Add to timeline";
+pub const ADD_NEW_TRACK_LABEL: &str = "Add on a new track";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortKey {
@@ -74,6 +75,7 @@ pub enum BinAction {
     Remove(MediaId),
     Rename(MediaId, String),
     AddToTimeline(MediaId),
+    AddToNewTrack(MediaId),
     AddGenerated(rw_model::Generated),
     AddTransition(rw_model::TransitionKind),
 }
@@ -339,6 +341,14 @@ fn tile(
             .clicked()
         {
             action = Some(BinAction::AddToTimeline(m.id));
+            ui.close();
+        }
+        if ui
+            .add_enabled(!missing, egui::Button::new(ADD_NEW_TRACK_LABEL))
+            .on_hover_text("Layer it over what's already there, at the playhead")
+            .clicked()
+        {
+            action = Some(BinAction::AddToNewTrack(m.id));
             ui.close();
         }
         if ui.button(RENAME_LABEL).clicked() {

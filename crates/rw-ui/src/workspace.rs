@@ -142,23 +142,27 @@ fn preview_panel(ui: &mut egui::Ui, s: &mut Session, tokens: Tokens, out: &mut V
         out.push(EditorAction::PlayPause);
     }
     let fps = canvas.frame_rate;
-    bar.label(
-        RichText::new(format!(
+    crate::layout::steady_text(
+        &mut bar,
+        &format!(
             "{} / {}",
             format::timecode(playhead, fps),
             format::timecode(s.project.duration(), fps)
-        ))
-        .monospace()
-        .color(tokens.text),
+        ),
+        "00:00:00:00 / 00:00:00:00",
+        egui::FontId::proportional(14.0),
+        tokens.text,
     );
     if playing {
         let st = s.player.stats();
         meter(&mut bar, st.level, tokens);
         if st.dropped > 0 {
-            bar.label(
-                RichText::new(format!("{} dropped", st.dropped))
-                    .small()
-                    .color(tokens.text_muted),
+            crate::layout::steady_text(
+                &mut bar,
+                &format!("{} dropped", st.dropped),
+                "0000 dropped",
+                egui::FontId::proportional(11.0),
+                tokens.text_muted,
             );
         }
     }

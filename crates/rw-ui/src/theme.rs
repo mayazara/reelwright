@@ -145,6 +145,7 @@ pub fn visuals(mode: ThemeMode) -> egui::Visuals {
 pub fn apply(ctx: &egui::Context, mode: ThemeMode) {
     ctx.set_visuals_of(egui::Theme::Dark, visuals(ThemeMode::Dark));
     ctx.set_visuals_of(egui::Theme::Light, visuals(ThemeMode::Light));
+    ctx.all_styles_mut(|s| s.spacing.interact_size.x = crate::layout::VALUE_BOX_WIDTH);
     ctx.set_theme(match mode {
         ThemeMode::Dark => egui::Theme::Dark,
         ThemeMode::Light => egui::Theme::Light,
