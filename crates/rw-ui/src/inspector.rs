@@ -10,8 +10,9 @@ use crate::theme::Tokens;
 use eframe::egui::{self, Response, RichText};
 use rw_edit::timeline::{LookPatch, TimelineOp};
 use rw_model::{
-    BlendMode, ColorAdjust, ColorControl, Crop, Filter, Fit, Generated, Item, ItemId, Layout, Look,
-    MAX_GAIN, MediaKind, Rgba, Time, Transform,
+    BlendMode, ColorAdjust, ColorControl, Crop, Effect, EffectKind, Filter, Fit, Generated, Item,
+    ItemId, Layout, Look, MAX_GAIN, MAX_SPEED, MAX_TRANSITION, MIN_SPEED, MIN_TRANSITION,
+    MediaKind, Rgba, Time, Transform, TransitionId, TransitionKind,
 };
 
 pub const EMPTY_LABEL: &str = "Select an item to edit its properties.";
@@ -41,6 +42,8 @@ pub enum Tab {
     Transform,
     Colour,
     Filters,
+    Effects,
+    Speed,
     Fade,
     Audio,
     Background,
@@ -52,6 +55,8 @@ impl Tab {
             Tab::Transform => "Transform",
             Tab::Colour => "Adjust colours",
             Tab::Filters => "Filters",
+            Tab::Effects => "Effects",
+            Tab::Speed => "Speed",
             Tab::Fade => "Fade",
             Tab::Audio => "Audio",
             Tab::Background => "Background",
@@ -139,6 +144,11 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
         .filter(|i| session.selection.contains(&i.id))
         .cloned()
         .collect();
+    if items.is_empty()
+        && let Some(id) = session.timeline.selected_transition
+    {
+        return transition_panel(ui, session, id, tokens);
+    }
     if items.is_empty() {
         ui.centered_and_justified(|ui| {
             ui.label(RichText::new(EMPTY_LABEL).color(tokens.text_muted));
@@ -159,10 +169,22 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
         .iter()
         .any(|i| media_of(i).is_some_and(|m| m.info.audio.is_some()));
     let background = items.iter().all(|i| i.generated_fill().is_some());
+    // Clips that play their source can change speed and direction.
+    let retimable: Vec<&Item> = items
+        .iter()
+        .filter(|i| {
+            i.held_frame().is_none()
+                && media_of(i)
+                    .is_some_and(|m| matches!(m.kind(), MediaKind::Video | MediaKind::Audio))
+        })
+        .collect();
 
     let mut tabs = Vec::new();
     if !visual.is_empty() {
-        tabs.extend([Tab::Transform, Tab::Colour, Tab::Filters]);
+        tabs.extend([Tab::Transform, Tab::Colour, Tab::Filters, Tab::Effects]);
+    }
+    if !retimable.is_empty() {
+        tabs.push(Tab::Speed);
     }
     if background {
         tabs.insert(0, Tab::Background);
@@ -221,6 +243,8 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
             Tab::Transform => transform_tab(ui, &mut e, &first.look, &shown, &first, tokens),
             Tab::Colour => colour_tab(ui, &mut e, &first.look.color),
             Tab::Filters => filters_tab(ui, &mut e, &first.look, tokens),
+            Tab::Effects => effects_tab(ui, &mut e, &first.look, first.id, tokens),
+            Tab::Speed => speed_tab(ui, &mut e, &retimable, audible, fps),
             Tab::Fade => fade_tab(ui, &mut e, &items),
             Tab::Audio => audio_tab(ui, &mut e, &items, &shown),
             Tab::Background => background_tab(ui, &mut e, first.generated_fill()),
@@ -581,6 +605,324 @@ fn filter_swatch(
         egui::StrokeKind::Inside,
     );
     resp.on_hover_text(f.name)
+}
+
+/// Effects in order, each with its intensity and settings; a grid adds more.
+fn effects_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, look: &Look, item: ItemId, tokens: Tokens) {
+    let effects = look.effects.clone();
+    let with = |f: &dyn Fn(&mut Vec<Effect>)| {
+        let mut v = effects.clone();
+        f(&mut v);
+        LookPatch {
+            effects: Some(v),
+            ..LookPatch::default()
+        }
+    };
+    if effects.is_empty() {
+        ui.label(
+            RichText::new("No effects yet. Pick one below.")
+                .small()
+                .color(tokens.text_muted),
+        );
+    }
+    for (i, fx) in effects.iter().enumerate() {
+        let info = rw_fx::effects::effect_info(fx.kind);
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(info.name).strong());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if named(ui.small_button("×"), &format!("Remove {}", info.name))
+                        .on_hover_text("Remove")
+                        .clicked()
+                    {
+                        e.commit(with(&|v| {
+                            v.remove(i);
+                        }));
+                    }
+                    if named(
+                        ui.add_enabled(i + 1 < effects.len(), egui::Button::new("↓").small()),
+                        &format!("Apply {} later", info.name),
+                    )
+                    .on_hover_text("Apply later")
+                    .clicked()
+                    {
+                        e.commit(with(&|v| v.swap(i, i + 1)));
+                    }
+                    if named(
+                        ui.add_enabled(i > 0, egui::Button::new("↑").small()),
+                        &format!("Apply {} earlier", info.name),
+                    )
+                    .on_hover_text("Apply earlier")
+                    .clicked()
+                    {
+                        e.commit(with(&|v| v.swap(i - 1, i)));
+                    }
+                });
+            });
+            let params = rw_fx::effects::resolved_params(fx);
+            egui::Grid::new(("effect", i))
+                .num_columns(2)
+                .spacing([10.0, 4.0])
+                .show(ui, |ui| {
+                    ui.label(if fx.kind == EffectKind::ChromaKey {
+                        "Tolerance"
+                    } else {
+                        "Intensity"
+                    });
+                    let mut v = fx.intensity;
+                    let r = ui.add(
+                        egui::Slider::new(&mut v, 0.0..=1.0)
+                            .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+                    );
+                    e.live(&r, with(&|fxs| fxs[i].intensity = v));
+                    ui.end_row();
+                    let skip = if fx.kind == EffectKind::ChromaKey {
+                        3
+                    } else {
+                        0
+                    };
+                    for (k, p) in info.params.iter().enumerate().skip(skip) {
+                        ui.label(p.name);
+                        let mut v = params[k];
+                        let r = ui.add(egui::Slider::new(&mut v, p.min..=p.max).max_decimals(2));
+                        e.live(
+                            &r,
+                            with(&|fxs| {
+                                let mut all = params[..info.params.len()].to_vec();
+                                all[k] = v;
+                                fxs[i].params = all;
+                            }),
+                        );
+                        ui.end_row();
+                    }
+                });
+            if fx.kind == EffectKind::ChromaKey {
+                ui.horizontal(|ui| {
+                    let key = Rgba([
+                        (params[0] * 255.0).round() as u8,
+                        (params[1] * 255.0).round() as u8,
+                        (params[2] * 255.0).round() as u8,
+                        255,
+                    ]);
+                    ui.label("Key colour");
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(22.0, 22.0), egui::Sense::hover());
+                    ui.painter().rect_filled(
+                        rect,
+                        4.0,
+                        egui::Color32::from_rgb(key.0[0], key.0[1], key.0[2]),
+                    );
+                    ui.label(RichText::new(to_hex(key)).small());
+                    let picking = e
+                        .session
+                        .canvas_tools
+                        .picking_key
+                        .is_some_and(|p| p.item == item && p.index == i);
+                    if picking {
+                        ui.label(RichText::new("Click the preview…").color(tokens.accent));
+                        if ui.small_button("Cancel").clicked() {
+                            e.session.canvas_tools.picking_key = None;
+                            e.session.clear_preview_patch();
+                        }
+                    } else if ui
+                        .button("Pick from preview")
+                        .on_hover_text("Click a spot in the preview to key out its colour")
+                        .clicked()
+                    {
+                        // Show the clip unkeyed while picking.
+                        e.session.canvas_tools.picking_key =
+                            Some(crate::canvas_tools::KeyPick { item, index: i });
+                        e.session
+                            .set_preview_patch(e.ids.clone(), with(&|fxs| fxs[i].intensity = 0.0));
+                    }
+                });
+            }
+        });
+    }
+    ui.add_space(6.0);
+    ui.label(RichText::new("Add effect").strong());
+    ui.horizontal_wrapped(|ui| {
+        for info in &rw_fx::effects::EFFECTS {
+            if ui.button(info.name).clicked() {
+                let new = rw_fx::effects::new_effect(info.kind);
+                e.commit(with(&|v| v.push(new.clone())));
+            }
+        }
+    });
+}
+
+/// Gives an icon-only button a name for screen readers.
+fn named(r: Response, name: &str) -> Response {
+    let enabled = r.enabled();
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, name));
+    r
+}
+
+/// Speed presets offered as buttons.
+pub const SPEED_PRESETS: &[f32] = &[0.25, 0.5, 1.0, 1.5, 2.0, 4.0];
+
+fn speed_tab(
+    ui: &mut egui::Ui,
+    e: &mut Edits<'_>,
+    items: &[&Item],
+    has_sound: bool,
+    fps: rw_model::FrameRate,
+) {
+    let Some(first) = items.first() else { return };
+    let ids: Vec<ItemId> = items.iter().map(|i| i.id).collect();
+    let set = |e: &mut Edits<'_>, speed: f32| {
+        e.out.push(EditorAction::Op(TimelineOp::SetSpeed {
+            items: ids.clone(),
+            speed,
+        }));
+    };
+    ui.horizontal(|ui| {
+        ui.label("Speed");
+        let id = ui.make_persistent_id(("speed", &e.ids));
+        let mut v: f32 = ui.data(|d| d.get_temp(id)).unwrap_or(first.speed);
+        let r = ui.add(
+            egui::Slider::new(&mut v, MIN_SPEED..=MAX_SPEED)
+                .logarithmic(true)
+                .custom_formatter(|v, _| format!("{v:.2}×"))
+                .custom_parser(|s| s.trim().trim_end_matches(['×', 'x']).trim().parse().ok()),
+        );
+        if r.changed() {
+            ui.data_mut(|d| d.insert_temp(id, v));
+        }
+        if (r.drag_stopped() || (r.changed() && !r.dragged())) && (v - first.speed).abs() > 1e-4 {
+            ui.data_mut(|d| d.remove::<f32>(id));
+            set(e, v);
+        }
+    });
+    ui.horizontal_wrapped(|ui| {
+        for preset in SPEED_PRESETS {
+            let on = (first.speed - preset).abs() < 1e-4;
+            if ui.selectable_label(on, format!("{preset}×")).clicked() && !on {
+                set(e, *preset);
+            }
+        }
+    });
+    ui.label(
+        RichText::new(format!(
+            "Plays for {}",
+            format::timecode(first.duration, fps)
+        ))
+        .small(),
+    );
+    ui.add_space(6.0);
+    let mut reverse = items.iter().all(|i| i.reverse);
+    if ui.checkbox(&mut reverse, "Play backwards").changed() {
+        e.out.push(EditorAction::Op(TimelineOp::SetReverse {
+            items: ids.clone(),
+            reverse,
+        }));
+    }
+    if has_sound {
+        let mut keep = items.iter().all(|i| i.keep_pitch);
+        if ui
+            .checkbox(&mut keep, "Keep the pitch of the sound")
+            .on_hover_text("Off: sound gets higher when faster and lower when slower")
+            .changed()
+        {
+            e.out.push(EditorAction::Op(TimelineOp::SetKeepPitch {
+                items: ids.clone(),
+                keep,
+            }));
+        }
+    }
+    ui.add_space(6.0);
+    if ui
+        .button("Freeze frame at playhead")
+        .on_hover_text("Holds the frame under the playhead for 2 seconds")
+        .clicked()
+    {
+        e.out.push(EditorAction::FreezeFrame);
+    }
+}
+
+/// Kind and length of the transition picked on the timeline.
+fn transition_panel(
+    ui: &mut egui::Ui,
+    session: &mut Session,
+    id: TransitionId,
+    tokens: Tokens,
+) -> Vec<EditorAction> {
+    let mut out = Vec::new();
+    let Some(tr) = session
+        .project
+        .tracks
+        .iter()
+        .flat_map(|t| &t.transitions)
+        .find(|t| t.id == id)
+        .cloned()
+    else {
+        session.timeline.selected_transition = None;
+        ui.centered_and_justified(|ui| {
+            ui.label(RichText::new(EMPTY_LABEL).color(tokens.text_muted));
+        });
+        return out;
+    };
+    ui.label(RichText::new("Transition").strong());
+    ui.label(
+        RichText::new(tr.kind.label())
+            .small()
+            .color(tokens.text_muted),
+    );
+    ui.separator();
+    egui::Grid::new("transition")
+        .num_columns(2)
+        .spacing([10.0, 6.0])
+        .show(ui, |ui| {
+            ui.label("Style");
+            egui::ComboBox::from_id_salt("transition-kind")
+                .selected_text(tr.kind.label())
+                .show_ui(ui, |ui| {
+                    for k in TransitionKind::ALL {
+                        if ui.selectable_label(tr.kind == k, k.label()).clicked() && k != tr.kind {
+                            out.push(EditorAction::Op(TimelineOp::SetTransition {
+                                id,
+                                kind: Some(k),
+                                duration: None,
+                            }));
+                        }
+                    }
+                });
+            ui.end_row();
+            ui.label("Duration");
+            let data_id = ui.make_persistent_id(("transition-length", id));
+            let current = tr.duration.as_secs_f64();
+            let mut v: f64 = ui.data(|d| d.get_temp(data_id)).unwrap_or(current);
+            let r = ui.add(
+                egui::Slider::new(
+                    &mut v,
+                    MIN_TRANSITION.as_secs_f64()..=MAX_TRANSITION.as_secs_f64(),
+                )
+                .suffix(" s")
+                .max_decimals(2),
+            );
+            if r.changed() {
+                ui.data_mut(|d| d.insert_temp(data_id, v));
+            }
+            if (r.drag_stopped() || (r.changed() && !r.dragged())) && (v - current).abs() > 1e-3 {
+                ui.data_mut(|d| d.remove::<f64>(data_id));
+                out.push(EditorAction::Op(TimelineOp::SetTransition {
+                    id,
+                    kind: None,
+                    duration: Some(Time::from_secs_f64(v)),
+                }));
+            }
+            ui.end_row();
+        });
+    ui.label(
+        RichText::new("Also drag the transition's edges on the timeline. It can't be longer than twice the shorter clip.")
+            .small()
+            .color(tokens.text_muted),
+    );
+    if ui.button("Remove transition").clicked() {
+        out.push(EditorAction::Op(TimelineOp::RemoveTransition { id }));
+        session.timeline.selected_transition = None;
+    }
+    out
 }
 
 fn fade_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, items: &[Item]) {

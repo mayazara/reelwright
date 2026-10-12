@@ -55,6 +55,7 @@ pub enum LibraryTab {
     #[default]
     Media,
     Backgrounds,
+    Transitions,
 }
 
 #[derive(Debug, Default)]
@@ -74,6 +75,7 @@ pub enum BinAction {
     Rename(MediaId, String),
     AddToTimeline(MediaId),
     AddGenerated(rw_model::Generated),
+    AddTransition(rw_model::TransitionKind),
 }
 
 /// Media to show, filtered and sorted. Search matches the name
@@ -119,10 +121,17 @@ pub fn show(
     ui.horizontal(|ui| {
         ui.selectable_value(&mut state.tab, LibraryTab::Media, "Your media");
         ui.selectable_value(&mut state.tab, LibraryTab::Backgrounds, "Backgrounds");
+        ui.selectable_value(&mut state.tab, LibraryTab::Transitions, "Transitions");
     });
     ui.separator();
     if state.tab == LibraryTab::Backgrounds {
         return crate::backgrounds::show(ui, tokens).map(BinAction::AddGenerated);
+    }
+    if state.tab == LibraryTab::Transitions {
+        return egui::ScrollArea::vertical()
+            .show(ui, |ui| crate::transitions::show(ui, tokens))
+            .inner
+            .map(BinAction::AddTransition);
     }
     ui.horizontal_wrapped(|ui| {
         if ui.button(IMPORT_FILES_LABEL).clicked() {

@@ -1,7 +1,7 @@
 //! Timeline geometry, row layout, snapping and selection: everything the
 //! widget decides that doesn't need a window.
 
-use rw_model::{FrameRate, Item, ItemId, Project, Time, TrackId, TrackKind};
+use rw_model::{FrameRate, Item, ItemId, Project, Time, TrackId, TrackKind, TransitionId};
 use std::collections::BTreeSet;
 
 /// Horizontal mapping between time and pixels.
@@ -316,6 +316,62 @@ pub fn gaps(items: &[Item]) -> Vec<(Time, Time)> {
     out
 }
 
+/// A cut between two back-to-back clips on a picture track, where a
+/// transition can go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cut {
+    /// Index into `project.tracks`.
+    pub track: usize,
+    pub a: ItemId,
+    pub b: ItemId,
+    pub at: Time,
+    /// The transition already on this cut.
+    pub transition: Option<TransitionId>,
+}
+
+/// Every cut on unlocked picture tracks.
+pub fn cuts(project: &Project) -> Vec<Cut> {
+    let mut out = Vec::new();
+    for (t, track) in project.tracks.iter().enumerate() {
+        if track.locked || !matches!(track.kind, TrackKind::Video | TrackKind::Overlay) {
+            continue;
+        }
+        for a in &track.items {
+            if let Some(b) = track.items.iter().find(|b| b.start == a.end()) {
+                out.push(Cut {
+                    track: t,
+                    a: a.id,
+                    b: b.id,
+                    at: b.start,
+                    transition: track
+                        .transitions
+                        .iter()
+                        .find(|tr| tr.a == a.id && tr.b == b.id)
+                        .map(|tr| tr.id),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// The cut on `track` nearest to `t`, if within `threshold`.
+pub fn nearest_cut(cuts: &[Cut], track: usize, t: Time, threshold: Time) -> Option<Cut> {
+    cuts.iter()
+        .filter(|c| c.track == track && (c.at - t).ticks().abs() <= threshold.ticks())
+        .min_by_key(|c| (c.at - t).ticks().abs())
+        .copied()
+}
+
+/// The cut leaving one of `selected` clips (for "add transition" without a
+/// drag): the first selected clip's outgoing cut, else its incoming one.
+pub fn cut_for_selection(cuts: &[Cut], selected: &BTreeSet<ItemId>) -> Option<Cut> {
+    cuts.iter()
+        .find(|c| selected.contains(&c.a))
+        .or_else(|| cuts.iter().find(|c| selected.contains(&c.b)))
+        .copied()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,6 +415,30 @@ mod tests {
         p.media.push(m);
         p.tracks = vec![main, over, audio];
         p
+    }
+
+    #[test]
+    fn cuts_on_picture_tracks_only() {
+        let mut p = project();
+        let all = cuts(&p);
+        // Main track 4 s; overlay clips aren't adjacent; audio is skipped.
+        assert_eq!(all.len(), 1);
+        assert_eq!((all[0].track, all[0].at), (0, S(4)));
+        assert_eq!(
+            nearest_cut(
+                &all,
+                0,
+                S(4) + Time::from_millis(80),
+                Time::from_millis(100)
+            ),
+            Some(all[0])
+        );
+        assert_eq!(nearest_cut(&all, 0, S(5), Time::from_millis(100)), None);
+        assert_eq!(nearest_cut(&all, 1, S(4), S(1)), None);
+        let sel: BTreeSet<ItemId> = [p.tracks[0].items[1].id].into_iter().collect();
+        assert_eq!(cut_for_selection(&all, &sel), Some(all[0]));
+        p.tracks[0].locked = true;
+        assert!(cuts(&p).is_empty());
     }
 
     #[test]

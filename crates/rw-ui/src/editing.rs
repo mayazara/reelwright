@@ -10,6 +10,9 @@ use rw_model::{
 };
 use std::collections::HashMap;
 
+/// How long a new freeze frame holds.
+pub const FREEZE_DURATION: Time = Time::from_secs(2);
+
 fn placement(project: &Project, row: DropRow) -> Placement {
     match row {
         DropRow::Track(i) => Placement::Track(project.tracks[i].id),
@@ -181,6 +184,10 @@ impl Session {
                 self.op(TimelineOp::Split { at, items });
             }
             EditorAction::Delete { ripple } => {
+                if let Some(id) = self.timeline.selected_transition.take() {
+                    self.op(TimelineOp::RemoveTransition { id });
+                    return;
+                }
                 let items = self.selected();
                 if !items.is_empty() && self.op(TimelineOp::Delete { items, ripple }) {
                     self.selection.clear();
@@ -311,6 +318,55 @@ impl Session {
             EditorAction::MoveMarker(id, at) => {
                 let _ = self.execute(Box::new(rw_edit::commands::MoveMarker::new(id, at)));
             }
+            EditorAction::FreezeFrame => {
+                let at = self.playhead();
+                let target = self
+                    .project
+                    .items()
+                    .find(|i| {
+                        self.selection.contains(&i.id)
+                            && i.contains(at)
+                            && i.held_frame().is_none()
+                            && i.media()
+                                .and_then(|m| self.project.media(m))
+                                .is_some_and(|m| m.kind() == MediaKind::Video)
+                    })
+                    .map(|i| i.id);
+                match target {
+                    Some(item) => {
+                        self.op(TimelineOp::Freeze {
+                            item,
+                            at,
+                            duration: FREEZE_DURATION,
+                        });
+                    }
+                    None => {
+                        self.notify("Select a video clip under the playhead to freeze a frame.")
+                    }
+                }
+            }
+            EditorAction::AddTransition(kind) => {
+                let cuts = logic::cuts(&self.project);
+                match logic::cut_for_selection(&cuts, &self.selection) {
+                    Some(c) => {
+                        if self.op(TimelineOp::AddTransition {
+                            a: c.a,
+                            kind,
+                            duration: rw_model::DEFAULT_TRANSITION,
+                        }) {
+                            self.timeline.selected_transition = logic::cuts(&self.project)
+                                .into_iter()
+                                .find(|x| x.a == c.a)
+                                .and_then(|x| x.transition);
+                            self.selection.clear();
+                        }
+                    }
+                    None => self.notify(
+                        "Select a clip that touches another, or drag the transition onto a cut.",
+                    ),
+                }
+            }
+            EditorAction::Notice(text) => self.notify(text),
         }
     }
 }

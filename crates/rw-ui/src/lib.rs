@@ -16,6 +16,7 @@ pub mod settings;
 pub mod textures;
 pub mod theme;
 pub mod timeline;
+pub mod transitions;
 pub mod workspace;
 
 use actions::EditorAction;
@@ -318,6 +319,11 @@ impl EditorUi {
             BinAction::AddGenerated(fill) => {
                 if let Some(s) = self.session.as_mut() {
                     s.apply(EditorAction::AppendGenerated(fill));
+                }
+            }
+            BinAction::AddTransition(kind) => {
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::AddTransition(kind));
                 }
             }
             BinAction::AddToTimeline(id) => {

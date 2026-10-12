@@ -4,7 +4,7 @@
 
 use crate::timeline::logic::DropRow;
 use rw_edit::timeline::TimelineOp;
-use rw_model::{Generated, MarkerId, MediaId, Time};
+use rw_model::{Generated, MarkerId, MediaId, Time, TransitionKind};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EditorAction {
@@ -46,4 +46,10 @@ pub enum EditorAction {
     },
     RemoveMarker(MarkerId),
     MoveMarker(MarkerId, Time),
+    /// Hold the selected video clip's frame at the playhead.
+    FreezeFrame,
+    /// Put a transition on the cut next to the selected clip.
+    AddTransition(TransitionKind),
+    /// Tell the user something (a hint after an action that did nothing).
+    Notice(String),
 }

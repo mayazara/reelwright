@@ -56,9 +56,22 @@ pub fn ago(then: SystemTime, now: SystemTime) -> String {
     }
 }
 
+/// A speed factor without needless decimals: 2, 0.5, 1.25.
+pub fn speed(v: f32) -> String {
+    let s = format!("{v:.2}");
+    s.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn speeds_drop_trailing_zeros() {
+        assert_eq!(speed(2.0), "2");
+        assert_eq!(speed(0.5), "0.5");
+        assert_eq!(speed(1.25), "1.25");
+    }
 
     #[test]
     fn formats() {

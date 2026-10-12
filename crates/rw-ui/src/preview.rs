@@ -115,6 +115,24 @@ impl Preview {
         self.scrub.reset();
     }
 
+    /// Colour of the shown frame at `(u, v)` (0–1 across and down). Reads
+    /// the frame back from the GPU, so only for one-off clicks.
+    pub fn sample(&self, u: f32, v: f32) -> Option<rw_model::Rgba> {
+        let img = self.compositor.read_back().ok()?;
+        if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
+            return None;
+        }
+        let x = ((u * img.width as f32) as u32).min(img.width - 1);
+        let y = ((v * img.height as f32) as u32).min(img.height - 1);
+        let i = ((y * img.width + x) * 4) as usize;
+        Some(rw_model::Rgba([
+            img.pixels[i],
+            img.pixels[i + 1],
+            img.pixels[i + 2],
+            255,
+        ]))
+    }
+
     pub fn texture(&self) -> Option<egui::TextureId> {
         self.texture
     }

@@ -37,7 +37,17 @@ struct Drag {
 #[derive(Debug, Default)]
 pub struct CanvasState {
     pub crop_mode: bool,
+    /// Waiting for a click in the preview to set a green-screen colour.
+    pub picking_key: Option<KeyPick>,
     drag: Option<Drag>,
+}
+
+/// The green-screen effect whose key colour the next preview click sets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyPick {
+    pub item: ItemId,
+    /// Position in the clip's effect list.
+    pub index: usize,
 }
 
 /// Where a clip's visible picture is, in canvas pixels.
@@ -317,6 +327,43 @@ pub fn show(
 
     let resp = ui.interact(image, ui.id().with("canvas-tools"), Sense::click_and_drag());
     let painter = ui.painter_at(panel);
+
+    if let Some(pick) = state.picking_key {
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        }
+        if resp.clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let uv = to_canvas(p) / canvas;
+            let colour = session
+                .preview
+                .as_ref()
+                .and_then(|pv| pv.sample(uv.x, uv.y));
+            state.picking_key = None;
+            session.clear_preview_patch();
+            if let (Some(c), Some((_, item))) = (colour, session.project.find_item(pick.item))
+                && let Some(fx) = item.look.effects.get(pick.index)
+            {
+                let mut effects = item.look.effects.clone();
+                let mut params = rw_fx::effects::resolved_params(fx)
+                    [..rw_fx::effects::effect_info(fx.kind).params.len()]
+                    .to_vec();
+                for (k, v) in c.0[..3].iter().enumerate() {
+                    params[k] = f32::from(*v) / 255.0;
+                }
+                effects[pick.index].params = params;
+                out.push(EditorAction::Op(TimelineOp::Look {
+                    items: vec![pick.item],
+                    patch: rw_edit::timeline::LookPatch {
+                        effects: Some(effects),
+                        ..Default::default()
+                    },
+                }));
+            }
+        }
+        return out;
+    }
 
     if let Some(item) = selected
         && let Some(g) = geometry(&shown, item)

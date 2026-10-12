@@ -14,7 +14,10 @@ use rw_cache::ProjectCache;
 use rw_edit::timeline::{Edge, Placement, TimelineOp, TrackChange};
 use rw_engine::filmstrip::{self, FilmstripInfo};
 use rw_media::Peaks;
-use rw_model::{Item, ItemId, MediaId, MediaKind, Project, Time, TrackKind, track_kind_for};
+use rw_model::{
+    DEFAULT_TRANSITION, Item, ItemId, MAX_TRANSITION, MIN_TRANSITION, MediaId, MediaKind, Project,
+    Time, TrackKind, TransitionId, TransitionKind, track_kind_for,
+};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -25,6 +28,10 @@ pub const RULER_HEIGHT: f32 = 26.0;
 const EDGE_GRAB: f32 = 6.0;
 /// Snap distance in pixels.
 const SNAP_PX: f32 = 8.0;
+/// How close to a cut a dropped transition must land, in pixels.
+const CUT_GRAB_PX: f32 = 40.0;
+/// Height of the transition marker drawn over a cut.
+const TRANSITION_HEIGHT: f32 = 20.0;
 
 pub const EMPTY_LABEL: &str = "Drag media here to start editing.";
 
@@ -101,6 +108,13 @@ enum Drag {
         from: Pos2,
         to: Pos2,
     },
+    /// Dragging an edge of a transition to change its length.
+    TransitionLength {
+        id: TransitionId,
+        cut: Time,
+        duration: Time,
+        original: Time,
+    },
 }
 
 /// Per-editor timeline view state.
@@ -110,8 +124,11 @@ pub struct TimelineState {
     pub snapping: bool,
     pub anchor: Option<ItemId>,
     pub scroll_y: f32,
+    /// A transition picked on the timeline (clips are deselected then).
+    pub selected_transition: Option<TransitionId>,
     drag: Option<Drag>,
     context_item: Option<ItemId>,
+    context_transition: Option<TransitionId>,
     context_marker: Option<rw_model::MarkerId>,
     context_track: Option<rw_model::TrackId>,
     /// Fit the whole project on the next frame.
@@ -414,6 +431,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
         );
     }
     let pointer = ui.input(|i| i.pointer.hover_pos());
+    let mut transition_hits: Vec<(TransitionId, Time, Rect)> = Vec::new();
     for r in &rows {
         let rr = row_rect(r);
         if rr.bottom() < tracks.top() || rr.top() > tracks.bottom() {
@@ -608,6 +626,52 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 ui.ctx(),
             );
         }
+
+        // Transitions, centred on their cuts.
+        for tr in &track.transitions {
+            let Some(a) = track.items.iter().find(|i| i.id == tr.a) else {
+                continue;
+            };
+            let cut = a.end();
+            let (s, e) = tr.window(cut);
+            let shown_len = match &state.drag {
+                Some(Drag::TransitionLength { id, duration, .. }) if *id == tr.id => *duration,
+                _ => tr.duration,
+            };
+            let half = Time(shown_len.ticks() / 2);
+            let (s, e) = if shown_len == tr.duration {
+                (s, e)
+            } else {
+                (cut - half, cut - half + shown_len)
+            };
+            let rect = Rect::from_x_y_ranges(
+                x_of(s)..=x_of(e).max(x_of(s) + 10.0),
+                (rr.center().y - TRANSITION_HEIGHT / 2.0)
+                    ..=(rr.center().y + TRANSITION_HEIGHT / 2.0),
+            );
+            let selected = state.selected_transition == Some(tr.id);
+            body_painter.rect(
+                rect,
+                CornerRadius::same(5),
+                if selected {
+                    t.accent
+                } else {
+                    t.surface_raised.gamma_multiply(0.92)
+                },
+                Stroke::new(1.5, if selected { t.text } else { t.accent }),
+                StrokeKind::Inside,
+            );
+            if rect.width() > 60.0 {
+                body_painter.text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    tr.kind.label(),
+                    FontId::proportional(10.0),
+                    if selected { t.surface } else { t.text },
+                );
+            }
+            transition_hits.push((tr.id, cut, rect));
+        }
     }
 
     // ---- Interaction ----
@@ -634,12 +698,28 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
         })
     };
 
+    let hit_transition = |p: Pos2| -> Option<(TransitionId, Time, Rect)> {
+        transition_hits
+            .iter()
+            .find(|(_, _, r)| r.expand(3.0).contains(p))
+            .copied()
+    };
+    let near_side = |r: Rect, p: Pos2| {
+        (p.x - r.left()).abs() < EDGE_GRAB || (r.right() - p.x).abs() < EDGE_GRAB
+    };
+
     if let Some(p) = pointer
         && state.drag.is_none()
         && body_resp.hovered()
     {
         if ruler.contains(p) {
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        } else if let Some((_, _, rect)) = hit_transition(p) {
+            ui.ctx().set_cursor_icon(if near_side(rect, p) {
+                CursorIcon::ResizeHorizontal
+            } else {
+                CursorIcon::PointingHand
+            });
         } else if let Some((ti, _, rect)) = hit_item(p)
             && !project.tracks[ti].locked
         {
@@ -665,6 +745,25 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 .map(|m| Drag::Marker { id, at: m.at })
         } else if ruler.contains(p) {
             Some(Drag::Playhead)
+        } else if let Some((id, cut, rect)) = hit_transition(p)
+            && near_side(rect, p)
+        {
+            let duration = project
+                .tracks
+                .iter()
+                .flat_map(|t| &t.transitions)
+                .find(|tr| tr.id == id)
+                .map_or(DEFAULT_TRANSITION, |tr| tr.duration);
+            state.selected_transition = Some(id);
+            ctx.selection.clear();
+            Some(Drag::TransitionLength {
+                id,
+                cut,
+                duration,
+                original: duration,
+            })
+        } else if hit_transition(p).is_some() {
+            None
         } else if let Some((ti, item, rect)) = hit_item(p) {
             if project.tracks[ti].locked {
                 None
@@ -829,6 +928,17 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                     t.text,
                 );
             }
+            Drag::TransitionLength { cut, duration, .. } => {
+                let half = (time_at(p.x) - *cut).ticks().abs();
+                *duration = Time(2 * half).clamp(MIN_TRANSITION, MAX_TRANSITION);
+                body_painter.text(
+                    p + vec2(12.0, -12.0),
+                    Align2::LEFT_BOTTOM,
+                    format!("{:.1} s", duration.as_secs_f64()),
+                    FontId::proportional(11.0),
+                    t.text,
+                );
+            }
             Drag::Marquee { from, to } => {
                 *to = p;
                 let r = Rect::from_two_pos(*from, *to);
@@ -896,6 +1006,20 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                     }));
                 }
             }
+            Drag::TransitionLength {
+                id,
+                duration,
+                original,
+                ..
+            } => {
+                if duration != original {
+                    out.push(EditorAction::Op(TimelineOp::SetTransition {
+                        id,
+                        kind: None,
+                        duration: Some(duration),
+                    }));
+                }
+            }
             Drag::Marquee { from, to } => {
                 let ids = logic::marquee(
                     project,
@@ -916,8 +1040,12 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
     if body_resp.clicked()
         && let Some(p) = body_resp.interact_pointer_pos()
     {
+        state.selected_transition = None;
         if ruler.contains(p) {
             out.push(EditorAction::Seek(time_at(p.x)));
+        } else if let Some((id, _, _)) = hit_transition(p) {
+            state.selected_transition = Some(id);
+            ctx.selection.clear();
         } else if let Some((_, item, _)) = hit_item(p) {
             let mode = if mods.shift {
                 ClickMode::Range
@@ -941,11 +1069,21 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
         && let Some(p) = body_resp.interact_pointer_pos()
     {
         state.context_marker = marker_at(p);
-        state.context_item = if state.context_marker.is_some() {
+        state.context_transition = if state.context_marker.is_some() {
+            None
+        } else {
+            hit_transition(p).map(|(id, _, _)| id)
+        };
+        state.context_item = if state.context_marker.is_some() || state.context_transition.is_some()
+        {
             None
         } else {
             hit_item(p).map(|(_, i, _)| i.id)
         };
+        if let Some(id) = state.context_transition {
+            state.selected_transition = Some(id);
+            ctx.selection.clear();
+        }
         if let Some(id) = state.context_item
             && !ctx.selection.contains(&id)
         {
@@ -960,10 +1098,53 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 ui.close();
             }
         });
+    } else if let Some(id) = state.context_transition {
+        body_resp.context_menu(|ui| {
+            if ui.button("Remove transition").clicked() {
+                out.push(EditorAction::Op(TimelineOp::RemoveTransition { id }));
+                ui.close();
+            }
+        });
     } else if let Some(id) = state.context_item {
         body_resp.context_menu(|ui| {
-            item_menu(ui, project, id, &mut out);
+            item_menu(ui, project, id, ctx.playhead, &mut out);
         });
+    }
+
+    // Transitions dragged from the library land on the nearest cut.
+    if let Some(p) = pointer.filter(|p| tracks.contains(*p)) {
+        let hovered = body_resp.dnd_hover_payload::<TransitionKind>().is_some();
+        let released = body_resp.dnd_release_payload::<TransitionKind>();
+        if hovered || released.is_some() {
+            let cuts = logic::cuts(project);
+            let cut = rows.iter().find(|r| row_rect(r).contains(p)).and_then(|r| {
+                logic::nearest_cut(&cuts, r.track, time_at(p.x), view.duration_of(CUT_GRAB_PX))
+            });
+            if let Some(c) = cut
+                && let Some(r) = rows.iter().find(|r| r.track == c.track)
+            {
+                let rr = row_rect(r);
+                let x = x_of(c.at);
+                body_painter.rect(
+                    Rect::from_center_size(pos2(x, rr.center().y), vec2(36.0, rr.height() - 6.0)),
+                    CornerRadius::same(5),
+                    t.accent.gamma_multiply(0.4),
+                    Stroke::new(2.0, t.accent),
+                    StrokeKind::Inside,
+                );
+                if let Some(kind) = released {
+                    out.push(EditorAction::Op(TimelineOp::AddTransition {
+                        a: c.a,
+                        kind: *kind,
+                        duration: DEFAULT_TRANSITION,
+                    }));
+                }
+            } else if released.is_some() {
+                out.push(EditorAction::Notice(
+                    "Drop a transition on the cut between two clips.".into(),
+                ));
+            }
+        }
     }
 
     // Media dragged from the bin.
@@ -1045,7 +1226,13 @@ fn drop_time(project: &Project, t: Time, snap_on: bool, threshold: Time, playhea
     logic::snap(t, &c, threshold)
 }
 
-fn item_menu(ui: &mut egui::Ui, project: &Project, id: ItemId, out: &mut Vec<EditorAction>) {
+fn item_menu(
+    ui: &mut egui::Ui,
+    project: &Project,
+    id: ItemId,
+    playhead: Time,
+    out: &mut Vec<EditorAction>,
+) {
     let Some((_, item)) = project.find_item(id) else {
         return;
     };
@@ -1060,6 +1247,36 @@ fn item_menu(ui: &mut egui::Ui, project: &Project, id: ItemId, out: &mut Vec<Edi
     }
     if ui.button("Copy").clicked() {
         out.push(EditorAction::Copy);
+        ui.close();
+    }
+    let plays_source = item.held_frame().is_none()
+        && media.is_some_and(|m| matches!(m.kind(), MediaKind::Video | MediaKind::Audio));
+    if ui
+        .add_enabled(
+            plays_source,
+            egui::Button::new(if item.reverse {
+                "Play forward"
+            } else {
+                "Reverse"
+            }),
+        )
+        .clicked()
+    {
+        out.push(EditorAction::Op(TimelineOp::SetReverse {
+            items: vec![id],
+            reverse: !item.reverse,
+        }));
+        ui.close();
+    }
+    let can_freeze = item.held_frame().is_none()
+        && media.is_some_and(|m| m.kind() == MediaKind::Video)
+        && item.contains(playhead);
+    if ui
+        .add_enabled(can_freeze, egui::Button::new("Freeze frame at playhead"))
+        .on_disabled_hover_text("Put the playhead over a video clip")
+        .clicked()
+    {
+        out.push(EditorAction::FreezeFrame);
         ui.close();
     }
     ui.separator();
@@ -1177,8 +1394,9 @@ fn draw_item(
                 let shown = tile.intersect(inner);
                 match (&strip, &thumb) {
                     (Some((info, tex)), _) => {
-                        let src = item.source_in
-                            + Time::from_secs_f64(f64::from(x - r.left()) * secs_per_px);
+                        let src = item.source_time(
+                            item.start + Time::from_secs_f64(f64::from(x - r.left()) * secs_per_px),
+                        );
                         let (tx, ty, tw, th) = info.tile_rect(info.tile_at(src));
                         let (iw, ih) = info.image_size();
                         let sub = uv_for(tile, inner);
@@ -1242,6 +1460,15 @@ fn draw_item(
         (None, Some(m)) => m.name.clone(),
         (None, None) => "Missing media".to_owned(),
     };
+    if item.held_frame().is_some() {
+        label = format!("Still · {label}");
+    }
+    if (item.speed - 1.0).abs() > 1e-4 {
+        label.push_str(&format!("  {}×", crate::format::speed(item.speed)));
+    }
+    if item.reverse {
+        label.push_str("  (reversed)");
+    }
     if item.muted {
         label.push_str("  (muted)");
     }
