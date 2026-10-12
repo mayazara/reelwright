@@ -51,8 +51,7 @@ fn drag(h: &mut Harness<'_, App>, from: egui::Pos2, to: egui::Pos2) {
 }
 
 fn centre(h: &Harness<'_, App>, label: &str) -> egui::Pos2 {
-    let c = h.get_by_label(label).rect().center();
-    egui::pos2(c.x as f32, c.y as f32)
+    h.get_by_label(label).rect().center()
 }
 
 fn item_count(h: &Harness<'_, App>) -> usize {
