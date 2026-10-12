@@ -6,6 +6,7 @@
 pub mod export;
 pub mod filmstrip;
 pub mod frames;
+pub mod gif;
 pub mod import;
 pub mod jobs;
 pub mod playback;

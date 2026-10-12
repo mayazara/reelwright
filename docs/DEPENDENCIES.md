@@ -31,6 +31,7 @@ Every third-party crate used directly by a workspace member, pinned with `=x.y.z
 | bytemuck | 1.25.2 | Zlib OR Apache-2.0 OR MIT | rw-render | Uniform buffer layout | M2 |
 | cosmic-text | 0.19.0 | MIT OR Apache-2.0 | rw-text | Text shaping (HarfRust), BiDi, line layout, font fallback and glyph rasterising (swash) | M5 |
 | unicode-script | 0.5.8 | MIT OR Apache-2.0 | rw-text | Script ids for per-script font fallback | M5 |
+| gif | 0.14.2 | MIT OR Apache-2.0 | rw-engine | GIF export (per-frame NeuQuant palettes via its `color_quant` dependency, MIT); FFmpeg's palette filters aren't in the trimmed build | M5 |
 | cpal | 0.18.2 | Apache-2.0 | rw-audio | Sound card output (ALSA/PulseAudio, CoreAudio, WASAPI); needs `libasound2-dev` to build on Linux | M2 |
 | ringbuf | 0.4.8 | MIT OR Apache-2.0 | rw-audio, rw-engine | Lock-free audio ring between mixer and output | M2 |
 

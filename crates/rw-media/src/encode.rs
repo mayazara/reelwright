@@ -1,4 +1,5 @@
-//! MP4 writer: H.264 video and AAC audio.
+//! Writers for exported files: video (MP4 with H.264/HEVC/AV1 and AAC, or
+//! WebM with VP9 and Opus) and sound only (MP3).
 
 use crate::decode::{CHANNELS, SAMPLE_RATE};
 use crate::ffmpeg::decode_err;
@@ -26,6 +27,115 @@ pub const H264_ENCODERS: &[&str] = &[
 ];
 const FALLBACK_ENCODER: &str = "mpeg4";
 
+/// HEVC: hardware and OS encoders only (software HEVC encoders are GPL).
+const HEVC_ENCODERS: &[&str] = &[
+    "hevc_videotoolbox",
+    "hevc_mf",
+    "hevc_nvenc",
+    "hevc_qsv",
+    "hevc_amf",
+];
+const AV1_ENCODERS: &[&str] = &["av1_nvenc", "av1_qsv", "av1_amf", "libsvtav1", "libaom-av1"];
+const VP9_ENCODERS: &[&str] = &["vp9_qsv", "libvpx-vp9"];
+
+/// Video compression formats the app can write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum VideoCodec {
+    #[default]
+    H264,
+    Hevc,
+    Av1,
+    Vp9,
+}
+
+impl VideoCodec {
+    pub const ALL: [VideoCodec; 4] = [
+        VideoCodec::H264,
+        VideoCodec::Hevc,
+        VideoCodec::Av1,
+        VideoCodec::Vp9,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            VideoCodec::H264 => "H.264 (plays everywhere)",
+            VideoCodec::Hevc => "HEVC / H.265 (smaller files)",
+            VideoCodec::Av1 => "AV1 (smallest files)",
+            VideoCodec::Vp9 => "VP9 (WebM, for the web)",
+        }
+    }
+
+    /// Encoders to try, best first.
+    pub fn candidates(self) -> Vec<&'static str> {
+        match self {
+            VideoCodec::H264 => H264_ENCODERS
+                .iter()
+                .copied()
+                .chain(std::iter::once(FALLBACK_ENCODER))
+                .collect(),
+            VideoCodec::Hevc => HEVC_ENCODERS.to_vec(),
+            VideoCodec::Av1 => AV1_ENCODERS.to_vec(),
+            VideoCodec::Vp9 => VP9_ENCODERS.to_vec(),
+        }
+    }
+
+    /// FFmpeg container name.
+    pub fn container(self) -> &'static str {
+        match self {
+            VideoCodec::Vp9 => "webm",
+            _ => "mp4",
+        }
+    }
+
+    /// File name extension (without the dot).
+    pub fn extension(self) -> &'static str {
+        match self {
+            VideoCodec::Vp9 => "webm",
+            _ => "mp4",
+        }
+    }
+
+    fn audio_codec(self) -> ff::codec::Id {
+        match self {
+            VideoCodec::Vp9 => ff::codec::Id::OPUS,
+            _ => ff::codec::Id::AAC,
+        }
+    }
+}
+
+/// Encoders of `codec` that start on this computer (a hardware encoder is
+/// listed by FFmpeg even without the hardware, so each is tried). Cached.
+pub fn working_encoders(codec: VideoCodec) -> Vec<String> {
+    static FOUND: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<VideoCodec, Vec<String>>>,
+    > = std::sync::OnceLock::new();
+    let found = FOUND.get_or_init(Default::default);
+    if let Some(v) = found.lock().unwrap_or_else(|e| e.into_inner()).get(&codec) {
+        return v.clone();
+    }
+    crate::ffmpeg::Ffmpeg::new();
+    let probe = VideoSettings {
+        width: 320,
+        height: 240,
+        frame_rate: FrameRate::FPS_30,
+        bit_rate: 1_000_000,
+        encoder: None,
+        codec,
+    };
+    let works: Vec<String> = codec
+        .candidates()
+        .into_iter()
+        .filter(|n| ff::encoder::find_by_name(n).is_some())
+        .filter(|n| open_video_encoder(n, &probe, true).is_ok())
+        .map(str::to_owned)
+        .collect();
+    found
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(codec, works.clone());
+    works
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct VideoSettings {
     pub width: u32,
@@ -34,6 +144,7 @@ pub struct VideoSettings {
     pub bit_rate: usize,
     /// Encoder name to use; `None` picks the first that works.
     pub encoder: Option<String>,
+    pub codec: VideoCodec,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -71,8 +182,147 @@ struct AudioTrack {
     encoder: ff::encoder::Audio,
     index: usize,
     frame_size: usize,
+    format: ff::format::Sample,
     pending: Vec<f32>,
     samples_written: i64,
+}
+
+impl AudioTrack {
+    /// Adds a stereo 48 kHz stream encoded with `id` (or the encoder named
+    /// `name`) to `octx`, in a sample format the encoder accepts.
+    fn open(
+        octx: &mut ff::format::context::Output,
+        codec: ff::Codec,
+        bit_rate: usize,
+        global_header: bool,
+    ) -> Result<Self, MediaError> {
+        use ff::format::Sample;
+        use ff::format::sample::Type;
+        let supported: Vec<Sample> = codec
+            .audio()
+            .ok()
+            .and_then(|a| a.formats().map(|f| f.collect()))
+            .unwrap_or_default();
+        let format = [
+            Sample::F32(Type::Planar),
+            Sample::F32(Type::Packed),
+            Sample::I16(Type::Planar),
+            Sample::I16(Type::Packed),
+        ]
+        .into_iter()
+        .find(|f| supported.is_empty() || supported.contains(f))
+        .ok_or_else(|| MediaError::Encode("no usable audio sample format".into()))?;
+        let mut enc = ff::codec::context::Context::new_with_codec(codec)
+            .encoder()
+            .audio()
+            .map_err(encode_err)?;
+        enc.set_rate(SAMPLE_RATE as i32);
+        enc.set_channel_layout(ff::ChannelLayout::STEREO);
+        enc.set_format(format);
+        enc.set_bit_rate(bit_rate);
+        enc.set_time_base(ff::Rational::new(1, SAMPLE_RATE as i32));
+        if global_header {
+            enc.set_flags(ff::codec::Flags::GLOBAL_HEADER);
+        }
+        let enc = enc.open_as(codec).map_err(encode_err)?;
+        let mut st = octx.add_stream(codec).map_err(encode_err)?;
+        st.set_parameters(&enc);
+        st.set_time_base(ff::Rational::new(1, SAMPLE_RATE as i32));
+        let frame_size = match enc.frame_size() {
+            0 => 1024,
+            n => n as usize,
+        };
+        Ok(AudioTrack {
+            index: st.index(),
+            encoder: enc,
+            frame_size,
+            format,
+            pending: Vec::new(),
+            samples_written: 0,
+        })
+    }
+
+    /// Encodes whole frames of pending samples (and the rest on `flush`).
+    fn encode(
+        &mut self,
+        octx: &mut ff::format::context::Output,
+        packet: &mut ff::Packet,
+        flush: bool,
+    ) -> Result<(), MediaError> {
+        use ff::format::Sample;
+        use ff::format::sample::Type;
+        let fs = self.frame_size;
+        while self.pending.len() >= fs * CHANNELS || (flush && !self.pending.is_empty()) {
+            let n = (self.pending.len() / CHANNELS).min(fs);
+            let mut frame = ff::frame::Audio::new(self.format, n, ff::ChannelLayout::STEREO);
+            frame.set_rate(SAMPLE_RATE);
+            let src = &self.pending[..n * CHANNELS];
+            let to_i16 = |v: f32| (v.clamp(-1.0, 1.0) * 32767.0).round() as i16;
+            match self.format {
+                Sample::F32(Type::Planar) => {
+                    for ch in 0..CHANNELS {
+                        let plane = frame.plane_mut::<f32>(ch);
+                        for (i, s) in plane.iter_mut().enumerate().take(n) {
+                            *s = src[i * CHANNELS + ch];
+                        }
+                    }
+                }
+                Sample::I16(Type::Planar) => {
+                    for ch in 0..CHANNELS {
+                        let plane = frame.plane_mut::<i16>(ch);
+                        for (i, s) in plane.iter_mut().enumerate().take(n) {
+                            *s = to_i16(src[i * CHANNELS + ch]);
+                        }
+                    }
+                }
+                Sample::I16(Type::Packed) => {
+                    let data = frame.data_mut(0);
+                    for (i, v) in src.iter().enumerate() {
+                        data[i * 2..i * 2 + 2].copy_from_slice(&to_i16(*v).to_ne_bytes());
+                    }
+                }
+                _ => {
+                    let data = frame.data_mut(0);
+                    for (i, v) in src.iter().enumerate() {
+                        data[i * 4..i * 4 + 4].copy_from_slice(&v.to_ne_bytes());
+                    }
+                }
+            }
+            self.pending.drain(..n * CHANNELS);
+            frame.set_pts(Some(self.samples_written));
+            self.samples_written += n as i64;
+            self.encoder.send_frame(&frame).map_err(encode_err)?;
+            self.drain(octx, packet)?;
+        }
+        if flush {
+            self.encoder.send_eof().map_err(encode_err)?;
+            self.drain(octx, packet)?;
+        }
+        Ok(())
+    }
+
+    fn drain(
+        &mut self,
+        octx: &mut ff::format::context::Output,
+        packet: &mut ff::Packet,
+    ) -> Result<(), MediaError> {
+        let tb = ff::Rational::new(1, SAMPLE_RATE as i32);
+        let ost_tb = octx.stream(self.index).map(|s| s.time_base()).unwrap_or(tb);
+        while self.encoder.receive_packet(packet).is_ok() {
+            packet.set_stream(self.index);
+            packet.rescale_ts(tb, ost_tb);
+            packet.write_interleaved(octx).map_err(encode_err)?;
+        }
+        Ok(())
+    }
+}
+
+/// `path` with `.part` appended: files are written there and renamed once
+/// complete, so a failed export never leaves a broken file behind.
+fn partial_path(path: &Path) -> PathBuf {
+    let mut p = path.as_os_str().to_owned();
+    p.push(".part");
+    PathBuf::from(p)
 }
 
 impl std::fmt::Debug for Mp4Writer {
@@ -145,15 +395,12 @@ impl Mp4Writer {
         if !video.width.is_multiple_of(2) || !video.height.is_multiple_of(2) {
             return Err(MediaError::Encode("frame size must be even".into()));
         }
-        let partial = {
-            let mut p = path.as_os_str().to_owned();
-            p.push(".part");
-            PathBuf::from(p)
-        };
+        let partial = partial_path(path);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let mut octx = ff::format::output_as(&partial, "mp4").map_err(encode_err)?;
+        let mut octx =
+            ff::format::output_as(&partial, video.codec.container()).map_err(encode_err)?;
         let global_header = octx
             .format()
             .flags()
@@ -161,10 +408,11 @@ impl Mp4Writer {
 
         let candidates: Vec<String> = match &video.encoder {
             Some(n) => vec![n.clone()],
-            None => H264_ENCODERS
-                .iter()
-                .chain(std::iter::once(&FALLBACK_ENCODER))
-                .map(|s| (*s).to_owned())
+            None => video
+                .codec
+                .candidates()
+                .into_iter()
+                .map(str::to_owned)
                 .collect(),
         };
         let mut last_err = None;
@@ -195,32 +443,15 @@ impl Mp4Writer {
         let audio = match audio {
             None => None,
             Some(a) => {
-                let codec = ff::encoder::find(ff::codec::Id::AAC)
-                    .ok_or_else(|| MediaError::Encode("AAC encoder not available".into()))?;
-                let mut enc = ff::codec::context::Context::new_with_codec(codec)
-                    .encoder()
-                    .audio()
-                    .map_err(encode_err)?;
-                enc.set_rate(SAMPLE_RATE as i32);
-                enc.set_channel_layout(ff::ChannelLayout::STEREO);
-                enc.set_format(ff::format::Sample::F32(ff::format::sample::Type::Planar));
-                enc.set_bit_rate(a.bit_rate);
-                enc.set_time_base(ff::Rational::new(1, SAMPLE_RATE as i32));
-                if global_header {
-                    enc.set_flags(ff::codec::Flags::GLOBAL_HEADER);
-                }
-                let enc = enc.open_as(codec).map_err(encode_err)?;
-                let mut st = octx.add_stream(codec).map_err(encode_err)?;
-                st.set_parameters(&enc);
-                st.set_time_base(ff::Rational::new(1, SAMPLE_RATE as i32));
-                let frame_size = (enc.frame_size() as usize).max(1);
-                Some(AudioTrack {
-                    index: st.index(),
-                    encoder: enc,
-                    frame_size,
-                    pending: Vec::new(),
-                    samples_written: 0,
-                })
+                let id = video.codec.audio_codec();
+                let codec = ff::encoder::find(id)
+                    .ok_or_else(|| MediaError::Encode(format!("{id:?} encoder not available")))?;
+                Some(AudioTrack::open(
+                    &mut octx,
+                    codec,
+                    a.bit_rate,
+                    global_header,
+                )?)
             }
         };
 
@@ -342,50 +573,10 @@ impl Mp4Writer {
     }
 
     fn encode_audio(&mut self, flush: bool) -> Result<(), MediaError> {
-        let Some(a) = self.audio.as_mut() else {
-            return Ok(());
-        };
-        let fs = a.frame_size;
-        while a.pending.len() >= fs * CHANNELS || (flush && !a.pending.is_empty()) {
-            let n = (a.pending.len() / CHANNELS).min(fs);
-            let mut frame = ff::frame::Audio::new(
-                ff::format::Sample::F32(ff::format::sample::Type::Planar),
-                n,
-                ff::ChannelLayout::STEREO,
-            );
-            frame.set_rate(SAMPLE_RATE);
-            for ch in 0..CHANNELS {
-                let plane = frame.plane_mut::<f32>(ch);
-                for (i, s) in plane.iter_mut().enumerate().take(n) {
-                    *s = a.pending[i * CHANNELS + ch];
-                }
-            }
-            a.pending.drain(..n * CHANNELS);
-            frame.set_pts(Some(a.samples_written));
-            a.samples_written += n as i64;
-            a.encoder.send_frame(&frame).map_err(encode_err)?;
-            Self::drain_audio(a, &mut self.octx, &mut self.packet)?;
+        match self.audio.as_mut() {
+            Some(a) => a.encode(&mut self.octx, &mut self.packet, flush),
+            None => Ok(()),
         }
-        if flush {
-            a.encoder.send_eof().map_err(encode_err)?;
-            Self::drain_audio(a, &mut self.octx, &mut self.packet)?;
-        }
-        Ok(())
-    }
-
-    fn drain_audio(
-        a: &mut AudioTrack,
-        octx: &mut ff::format::context::Output,
-        packet: &mut ff::Packet,
-    ) -> Result<(), MediaError> {
-        let tb = ff::Rational::new(1, SAMPLE_RATE as i32);
-        let ost_tb = octx.stream(a.index).map(|s| s.time_base()).unwrap_or(tb);
-        while a.encoder.receive_packet(packet).is_ok() {
-            packet.set_stream(a.index);
-            packet.rescale_ts(tb, ost_tb);
-            packet.write_interleaved(octx).map_err(encode_err)?;
-        }
-        Ok(())
     }
 
     /// Flushes encoders, finalises the file and moves it into place.
@@ -407,6 +598,76 @@ impl Mp4Writer {
         // function, so the muxer is dropped explicitly.)
         drop(audio);
         drop(video);
+        drop(octx);
+        std::fs::rename(&partial, &path)?;
+        Ok(path)
+    }
+
+    /// Stops writing and deletes the partial file.
+    pub fn abort(self) {
+        let partial = self.partial.clone();
+        drop(self);
+        let _ = std::fs::remove_file(partial);
+    }
+}
+
+/// Writes sound only (MP3) one chunk at a time.
+pub struct AudioWriter {
+    octx: ff::format::context::Output,
+    path: PathBuf,
+    partial: PathBuf,
+    track: AudioTrack,
+    packet: ff::Packet,
+}
+
+impl std::fmt::Debug for AudioWriter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AudioWriter")
+            .field("path", &self.path)
+            .finish()
+    }
+}
+
+impl AudioWriter {
+    /// Creates an MP3 file at `path` (written to a temporary name and
+    /// renamed by [`Self::finish`]).
+    pub fn create_mp3(path: &Path, bit_rate: usize) -> Result<Self, MediaError> {
+        crate::ffmpeg::Ffmpeg::new();
+        let partial = partial_path(path);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let mut octx = ff::format::output_as(&partial, "mp3").map_err(encode_err)?;
+        let codec = ff::encoder::find_by_name("libmp3lame")
+            .ok_or_else(|| MediaError::Encode("MP3 encoder not available".into()))?;
+        let track = AudioTrack::open(&mut octx, codec, bit_rate, false)?;
+        octx.write_header().map_err(encode_err)?;
+        Ok(AudioWriter {
+            octx,
+            path: path.to_path_buf(),
+            partial,
+            track,
+            packet: ff::Packet::empty(),
+        })
+    }
+
+    /// Appends interleaved stereo samples at 48 kHz.
+    pub fn write(&mut self, samples: &[f32]) -> Result<(), MediaError> {
+        self.track.pending.extend_from_slice(samples);
+        self.track.encode(&mut self.octx, &mut self.packet, false)
+    }
+
+    pub fn finish(mut self) -> Result<PathBuf, MediaError> {
+        self.track.encode(&mut self.octx, &mut self.packet, true)?;
+        self.octx.write_trailer().map_err(encode_err)?;
+        let AudioWriter {
+            octx,
+            path,
+            partial,
+            track,
+            ..
+        } = self;
+        drop(track);
         drop(octx);
         std::fs::rename(&partial, &path)?;
         Ok(path)

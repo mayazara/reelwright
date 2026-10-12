@@ -25,6 +25,7 @@ fn round_trip(encoder: Option<&str>) {
         frame_rate: fps,
         bit_rate: 4_000_000,
         encoder: encoder.map(str::to_owned),
+        codec: Default::default(),
     };
     let mut w =
         Mp4Writer::create(&path, &video, Some(&AudioSettings { bit_rate: 192_000 })).unwrap();
@@ -110,6 +111,7 @@ fn odd_sizes_and_wrong_frames_are_errors() {
         frame_rate: FrameRate::FPS_30,
         bit_rate: 1_000_000,
         encoder: None,
+        codec: Default::default(),
     };
     assert!(Mp4Writer::create(&dir.path().join("a.mp4"), &s, None).is_err());
     let s = VideoSettings { width: 320, ..s };

@@ -12,7 +12,9 @@ pub mod peaks;
 mod rgba;
 
 pub use decode::{AudioReader, VideoFrame, VideoReader};
-pub use encode::{AudioSettings, Mp4Writer, VideoSettings};
+pub use encode::{
+    AudioSettings, AudioWriter, Mp4Writer, VideoCodec, VideoSettings, working_encoders,
+};
 pub use ffmpeg::Ffmpeg;
 pub use peaks::Peaks;
 pub use rgba::RgbaImage;
