@@ -12,9 +12,9 @@ use rw_edit::timeline::{LookPatch, TimelineOp};
 use rw_model::{
     BlendMode, ColorAdjust, ColorControl, Crop, Effect, EffectKind, Filter, Fit, Generated, Item,
     ItemId, Layout, Look, MAX_GAIN, MAX_SPEED, MAX_TEXT_SIZE, MAX_TRANSITION, MIN_SPEED,
-    MIN_TEXT_SIZE, MIN_TRANSITION, MediaKind, Outline, Rgba, Shadow, TextAlign, TextAnimation,
-    TextBehaviour, TextBox, TextMotion, TextSpec, TextStyle, Time, Transform, TransitionId,
-    TransitionKind,
+    MIN_TEXT_SIZE, MIN_TRANSITION, MediaKind, Outline, Rgba, Shadow, ShapeKind, ShapeSpec,
+    TextAlign, TextAnimation, TextBehaviour, TextBox, TextMotion, TextSpec, TextStyle, Time,
+    Transform, TransitionId, TransitionKind, VisualiserSpec, VisualiserStyle,
 };
 
 pub const EMPTY_LABEL: &str = "Select an item to edit its properties.";
@@ -42,6 +42,8 @@ pub fn db_to_gain(db: f32) -> f32 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Text,
+    Shape,
+    Visualiser,
     Transform,
     Colour,
     Filters,
@@ -56,6 +58,8 @@ impl Tab {
     pub fn label(self) -> &'static str {
         match self {
             Tab::Text => "Text",
+            Tab::Shape => "Shape",
+            Tab::Visualiser => "Visualiser",
             Tab::Transform => "Transform",
             Tab::Colour => "Adjust colours",
             Tab::Filters => "Filters",
@@ -173,6 +177,7 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
         .filter(|i| {
             i.generated_fill().is_some()
                 || i.text().is_some()
+                || i.is_graphic()
                 || media_of(i).is_some_and(|m| m.kind() != MediaKind::Audio)
         })
         .collect();
@@ -203,6 +208,11 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
     if first.text().is_some() {
         tabs.insert(0, Tab::Text);
     }
+    match first.kind {
+        rw_model::ItemKind::Shape { .. } => tabs.insert(0, Tab::Shape),
+        rw_model::ItemKind::Visualiser { .. } => tabs.insert(0, Tab::Visualiser),
+        _ => {}
+    }
     tabs.push(Tab::Fade);
     if audible {
         tabs.push(Tab::Audio);
@@ -220,8 +230,7 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
             (Some(Generated::Solid { .. }), _) => "Colour background".to_owned(),
             (Some(Generated::Gradient { .. }), _) => "Gradient background".to_owned(),
             (None, Some(m)) => m.name.clone(),
-            (None, None) if item.text().is_some() => "Text".to_owned(),
-            (None, None) => "Missing media".to_owned(),
+            (None, None) => graphic_name(item),
         };
         ui.label(RichText::new(name).strong());
         ui.label(
@@ -256,6 +265,8 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
         .auto_shrink([false, true])
         .show(ui, |ui| match tab {
             Tab::Text => text_tab(ui, &mut e, &first, tokens),
+            Tab::Shape => shape_tab(ui, &mut e, &first),
+            Tab::Visualiser => visualiser_tab(ui, &mut e, &first),
             Tab::Transform => transform_tab(ui, &mut e, &first.look, &shown, &first, tokens),
             Tab::Colour => colour_tab(ui, &mut e, &first.look.color),
             Tab::Filters => filters_tab(ui, &mut e, &first.look, tokens),
@@ -960,6 +971,17 @@ impl Edits<'_> {
                 .push(EditorAction::Op(TimelineOp::SetText { item, text }));
         }
     }
+
+    /// A text colour from a colour picker: each change commits, and a quick
+    /// run of them undoes as one step.
+    fn text_colour(&mut self, r: &Response, item: ItemId, text: TextSpec, which: &str) {
+        if r.changed() {
+            self.out.push(EditorAction::LiveOp {
+                op: TimelineOp::SetText { item, text },
+                key: format!("text {which} {item}"),
+            });
+        }
+    }
 }
 
 fn c32(c: Rgba) -> egui::Color32 {
@@ -1086,7 +1108,7 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
 
             ui.label("Colour");
             let (r, c) = colour_button(ui, s.color);
-            e.live_text(&r, id, with(&|n| n.style.color = c), false);
+            e.text_colour(&r, id, with(&|n| n.style.color = c), "color");
             ui.end_row();
 
             ui.label("Align");
@@ -1129,11 +1151,11 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
         }
         if let Some(o) = s.outline {
             let (r, c) = colour_button(ui, o.color);
-            e.live_text(
+            e.text_colour(
                 &r,
                 id,
                 with(&|n| n.style.outline = Some(Outline { color: c, ..o })),
-                false,
+                "outline",
             );
             let mut w = o.width;
             let r = ui
@@ -1159,11 +1181,11 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
         }
         if let Some(sh) = s.shadow {
             let (r, c) = colour_button(ui, sh.color);
-            e.live_text(
+            e.text_colour(
                 &r,
                 id,
                 with(&|n| n.style.shadow = Some(Shadow { color: c, ..sh })),
-                false,
+                "shadow",
             );
             let mut b = sh.blur;
             let r = ui
@@ -1214,11 +1236,11 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
         }
         if let Some(b) = s.background {
             let (r, c) = colour_button(ui, b.color);
-            e.live_text(
+            e.text_colour(
                 &r,
                 id,
                 with(&|n| n.style.background = Some(TextBox { color: c, ..b })),
-                false,
+                "background",
             );
         }
     });
@@ -1303,6 +1325,223 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
                 ui.end_row();
             }
         });
+}
+
+/// Commits a whole new item kind for a shape or visualiser.
+fn commit_kind(e: &mut Edits<'_>, item: ItemId, kind: &rw_model::ItemKind) {
+    commit_kind_as(e, item, kind, None);
+}
+
+/// Like [`commit_kind`]; with `live`, a quick run of these undoes as one
+/// step (colour pickers).
+fn commit_kind_as(e: &mut Edits<'_>, item: ItemId, kind: &rw_model::ItemKind, live: Option<&str>) {
+    let op = match kind {
+        rw_model::ItemKind::Shape { shape } => TimelineOp::SetShape {
+            item,
+            shape: shape.clone(),
+        },
+        rw_model::ItemKind::Visualiser { visualiser } => TimelineOp::SetVisualiser {
+            item,
+            visualiser: visualiser.clone(),
+        },
+        _ => return,
+    };
+    e.out.push(match live {
+        Some(k) => EditorAction::LiveOp {
+            op,
+            key: format!("{k} {item}"),
+        },
+        None => EditorAction::Op(op),
+    });
+}
+
+fn shape_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item) {
+    let rw_model::ItemKind::Shape { shape } = &item.kind else {
+        return;
+    };
+    let id = item.id;
+    let with = |f: &dyn Fn(&mut ShapeSpec)| {
+        let mut n = shape.clone();
+        f(&mut n);
+        rw_model::ItemKind::Shape { shape: n }
+    };
+    egui::Grid::new("shape")
+        .num_columns(2)
+        .spacing([10.0, 6.0])
+        .show(ui, |ui| {
+            ui.label("Shape");
+            egui::ComboBox::from_id_salt("shape-kind")
+                .selected_text(shape.kind.label())
+                .show_ui(ui, |ui| {
+                    for k in ShapeKind::ALL {
+                        if ui.selectable_label(shape.kind == k, k.label()).clicked()
+                            && k != shape.kind
+                        {
+                            // Keep the colours; take the new kind's proportions.
+                            let fresh = ShapeSpec::new(k);
+                            commit_kind(
+                                e,
+                                id,
+                                &with(&|n| {
+                                    n.kind = k;
+                                    n.aspect = fresh.aspect;
+                                    n.corner_radius = fresh.corner_radius;
+                                    if k.is_line() {
+                                        n.fill = None;
+                                    }
+                                }),
+                            );
+                        }
+                    }
+                });
+            ui.end_row();
+            if !shape.kind.is_line() {
+                ui.label("Fill");
+                ui.horizontal(|ui| {
+                    let mut on = shape.fill.is_some();
+                    if ui.checkbox(&mut on, "").changed() {
+                        let c = on.then_some(Rgba([14, 124, 116, 255]));
+                        commit_kind(e, id, &with(&|n| n.fill = c));
+                    }
+                    if let Some(f) = shape.fill {
+                        let (r, c) = colour_button(ui, f);
+                        if r.changed() {
+                            commit_kind_as(e, id, &with(&|n| n.fill = Some(c)), Some("fill"));
+                        }
+                    }
+                });
+                ui.end_row();
+            }
+            ui.label(if shape.kind.is_line() {
+                "Line"
+            } else {
+                "Outline"
+            });
+            ui.horizontal(|ui| {
+                if !shape.kind.is_line() {
+                    let mut on = shape.stroke.is_some();
+                    if ui.checkbox(&mut on, "").changed() {
+                        let s = on.then_some(rw_model::ShapeStroke {
+                            color: Rgba([255, 255, 255, 255]),
+                            width: 0.04,
+                        });
+                        commit_kind(e, id, &with(&|n| n.stroke = s));
+                    }
+                }
+                if let Some(s) = shape.stroke {
+                    let (r, c) = colour_button(ui, s.color);
+                    if r.changed() {
+                        commit_kind_as(
+                            e,
+                            id,
+                            &with(&|n| n.stroke = Some(rw_model::ShapeStroke { color: c, ..s })),
+                            Some("stroke"),
+                        );
+                    }
+                    let mut w = s.width;
+                    let r = ui
+                        .add(egui::Slider::new(&mut w, 0.005..=0.4).max_decimals(3))
+                        .on_hover_text("Thickness, as a share of the shape's height");
+                    if r.drag_stopped() || (r.changed() && !r.dragged()) {
+                        commit_kind(
+                            e,
+                            id,
+                            &with(&|n| n.stroke = Some(rw_model::ShapeStroke { width: w, ..s })),
+                        );
+                    }
+                }
+            });
+            ui.end_row();
+            if matches!(shape.kind, ShapeKind::Rectangle | ShapeKind::SpeechBubble) {
+                ui.label("Corners");
+                let mut v = shape.corner_radius;
+                let r = ui.add(egui::Slider::new(&mut v, 0.0..=0.5).max_decimals(2));
+                if r.drag_stopped() || (r.changed() && !r.dragged()) {
+                    commit_kind(e, id, &with(&|n| n.corner_radius = v));
+                }
+                ui.end_row();
+            }
+        });
+    ui.label(RichText::new("Drag a side handle in the preview to change its proportions.").small());
+}
+
+fn visualiser_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item) {
+    let rw_model::ItemKind::Visualiser { visualiser: v } = &item.kind else {
+        return;
+    };
+    let id = item.id;
+    let with = |f: &dyn Fn(&mut VisualiserSpec)| {
+        let mut n = v.clone();
+        f(&mut n);
+        rw_model::ItemKind::Visualiser { visualiser: n }
+    };
+    egui::Grid::new("visualiser")
+        .num_columns(2)
+        .spacing([10.0, 6.0])
+        .show(ui, |ui| {
+            ui.label("Style");
+            ui.horizontal(|ui| {
+                for s in VisualiserStyle::ALL {
+                    if ui.selectable_label(v.style == s, s.label()).clicked() && s != v.style {
+                        commit_kind(e, id, &with(&|n| n.style = s));
+                    }
+                }
+            });
+            ui.end_row();
+            ui.label("Colour");
+            let (r, c) = colour_button(ui, v.color);
+            if r.changed() {
+                commit_kind_as(e, id, &with(&|n| n.color = c), Some("colour"));
+            }
+            ui.end_row();
+            if v.style != VisualiserStyle::Wave {
+                ui.label("Bars");
+                let mut b = v.bars;
+                let r = ui.add(egui::Slider::new(&mut b, 8..=128));
+                if r.drag_stopped() || (r.changed() && !r.dragged()) {
+                    commit_kind(e, id, &with(&|n| n.bars = b));
+                }
+                ui.end_row();
+            }
+            ui.label("Sensitivity");
+            let mut s = v.sensitivity;
+            let r = ui.add(
+                egui::Slider::new(&mut s, 0.2..=4.0)
+                    .logarithmic(true)
+                    .max_decimals(2),
+            );
+            if r.drag_stopped() || (r.changed() && !r.dragged()) {
+                commit_kind(e, id, &with(&|n| n.sensitivity = s));
+            }
+            ui.end_row();
+        });
+    ui.label(RichText::new("It moves with all the sound in the project.").small());
+}
+
+/// What to call a clip that isn't a media file.
+pub fn graphic_name(item: &Item) -> String {
+    match &item.kind {
+        rw_model::ItemKind::Text { text } => {
+            let first = text.text.lines().next().unwrap_or_default();
+            if first.is_empty() {
+                "Text".into()
+            } else {
+                format!("Text: {first}")
+            }
+        }
+        rw_model::ItemKind::Sticker { sticker } => rw_assets::stickers::bundled()
+            .iter()
+            .find(|s| sticker.pack == rw_assets::stickers::BUNDLED && s.id == sticker.id)
+            .map_or_else(
+                || format!("Sticker: {}", sticker.id),
+                |s| format!("Sticker: {}", s.name),
+            ),
+        rw_model::ItemKind::Shape { shape } => shape.kind.label().to_owned(),
+        rw_model::ItemKind::Visualiser { visualiser } => {
+            format!("Visualiser ({})", visualiser.style.label().to_lowercase())
+        }
+        _ => "Missing media".into(),
+    }
 }
 
 fn fade_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, items: &[Item]) {

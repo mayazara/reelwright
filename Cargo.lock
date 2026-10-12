@@ -3408,6 +3408,7 @@ dependencies = [
  "egui_dock",
  "egui_kittest",
  "rfd",
+ "rw-assets",
  "rw-audio",
  "rw-cache",
  "rw-edit",

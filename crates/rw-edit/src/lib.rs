@@ -24,6 +24,11 @@ pub trait Command: fmt::Debug + Send {
     fn label(&self) -> String;
     fn apply(&mut self, project: &mut Project) -> Result<(), EditError>;
     fn revert(&mut self, project: &mut Project);
+    /// Edits with the same key made in quick succession (dragging in a
+    /// colour picker, typing) undo as one step.
+    fn coalesce_key(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Several commands applied and undone as one step.
@@ -69,7 +74,14 @@ impl Command for Compound {
 struct Entry {
     seq: u64,
     command: Box<dyn Command>,
+    /// Entries sharing a group undo and redo together.
+    group: u64,
+    key: Option<String>,
+    at: std::time::Instant,
 }
+
+/// Edits with the same coalesce key closer together than this merge.
+pub const COALESCE_WINDOW: std::time::Duration = std::time::Duration::from_millis(1500);
 
 /// Undo and redo stacks. Unlimited depth.
 #[derive(Default)]
@@ -78,6 +90,8 @@ pub struct History {
     redo: Vec<Entry>,
     next_seq: u64,
     saved_state: u64,
+    /// Merge quick same-key edits into one step (on by default).
+    no_coalescing: bool,
 }
 
 impl fmt::Debug for History {
@@ -98,6 +112,11 @@ impl History {
         }
     }
 
+    /// Turns merging of quick same-key edits on or off.
+    pub fn set_coalescing(&mut self, on: bool) {
+        self.no_coalescing = !on;
+    }
+
     /// Applies `command` and records it. Clears the redo stack.
     pub fn execute(
         &mut self,
@@ -107,36 +126,65 @@ impl History {
         command.apply(project)?;
         let seq = self.next_seq;
         self.next_seq += 1;
-        self.undo.push(Entry { seq, command });
+        let key = command.coalesce_key();
+        let now = std::time::Instant::now();
+        let group = match self.undo.last() {
+            Some(top)
+                if !self.no_coalescing
+                    && key.is_some()
+                    && top.key == key
+                    && now.duration_since(top.at) < COALESCE_WINDOW
+                    && self.saved_state != top.seq =>
+            {
+                top.group
+            }
+            _ => seq,
+        };
+        self.undo.push(Entry {
+            seq,
+            command,
+            group,
+            key,
+            at: now,
+        });
         self.redo.clear();
         Ok(())
     }
 
-    /// Undoes the last command. Returns its label.
+    /// Undoes the last step (a command, or a run of merged ones). Returns
+    /// its label.
     pub fn undo(&mut self, project: &mut Project) -> Option<String> {
-        let mut entry = self.undo.pop()?;
-        entry.command.revert(project);
-        let label = entry.command.label();
-        self.redo.push(entry);
-        Some(label)
+        let group = self.undo.last()?.group;
+        let mut label = None;
+        while self.undo.last().is_some_and(|e| e.group == group) {
+            let mut entry = self.undo.pop().expect("checked");
+            entry.command.revert(project);
+            label = Some(entry.command.label());
+            self.redo.push(entry);
+        }
+        label
     }
 
-    /// Re-applies the last undone command. Returns its label.
+    /// Re-applies the last undone step. Returns its label.
     pub fn redo(&mut self, project: &mut Project) -> Option<String> {
-        let mut entry = self.redo.pop()?;
-        match entry.command.apply(project) {
-            Ok(()) => {
-                let label = entry.command.label();
-                self.undo.push(entry);
-                Some(label)
-            }
-            // A command that applied once should apply again; if it does not,
-            // drop the redo stack rather than leave it inconsistent.
-            Err(_) => {
-                self.redo.clear();
-                None
+        let group = self.redo.last()?.group;
+        let mut label = None;
+        while self.redo.last().is_some_and(|e| e.group == group) {
+            let mut entry = self.redo.pop().expect("checked");
+            match entry.command.apply(project) {
+                Ok(()) => {
+                    label = Some(entry.command.label());
+                    self.undo.push(entry);
+                }
+                // A command that applied once should apply again; if it does
+                // not, drop the redo stack rather than leave it inconsistent.
+                Err(_) => {
+                    self.redo.clear();
+                    return None;
+                }
             }
         }
+        label
     }
 
     pub fn can_undo(&self) -> bool {

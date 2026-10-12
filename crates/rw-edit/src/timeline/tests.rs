@@ -812,6 +812,8 @@ proptest! {
         let start = fixture();
         let mut p = start.clone();
         let mut h = History::new();
+        // Each edit must revert exactly on its own.
+        h.set_coalescing(false);
         let mut states = vec![p.clone()];
         for g in &gens {
             match g {

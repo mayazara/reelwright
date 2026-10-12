@@ -9,6 +9,12 @@ use rw_model::{Generated, MarkerId, MediaId, TextSpec, Time, TransitionKind};
 #[derive(Debug, Clone, PartialEq)]
 pub enum EditorAction {
     Op(TimelineOp),
+    /// An edit from a control that changes continuously (a colour picker):
+    /// a quick run with the same key undoes as one step.
+    LiveOp {
+        op: TimelineOp,
+        key: String,
+    },
     Seek(Time),
     PlayPause,
     SplitAtPlayhead,
@@ -55,6 +61,15 @@ pub enum EditorAction {
     AddTransition(TransitionKind),
     /// Tell the user something (a hint after an action that did nothing).
     Notice(String),
+    /// Add a graphic (sticker, shape, visualiser) at the playhead on a
+    /// track above the main one.
+    AddGraphic(rw_model::Item),
+    /// Drop a graphic at `at` on `row`.
+    InsertGraphic {
+        item: rw_model::Item,
+        row: DropRow,
+        at: Time,
+    },
     /// Add a text item at the playhead on a text track.
     AddText(TextItem),
     /// Drop a text item at `at` on `row`.

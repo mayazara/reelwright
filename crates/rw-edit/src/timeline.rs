@@ -176,6 +176,11 @@ pub enum TimelineOp {
         item: ItemId,
         shape: rw_model::ShapeSpec,
     },
+    /// Replaces an audio visualiser's style and settings.
+    SetVisualiser {
+        item: ItemId,
+        visualiser: rw_model::VisualiserSpec,
+    },
 }
 
 /// A partial change to [`Look`]; applied field by field.
@@ -278,6 +283,7 @@ impl TimelineOp {
             TimelineOp::RemoveTransition { .. } => "Remove transition".into(),
             TimelineOp::SetText { .. } => "Edit text".into(),
             TimelineOp::SetShape { .. } => "Edit shape".into(),
+            TimelineOp::SetVisualiser { .. } => "Edit visualiser".into(),
             TimelineOp::SetTrack { change, .. } => match change {
                 TrackChange::Locked(true) => "Lock track",
                 TrackChange::Locked(false) => "Unlock track",
@@ -335,6 +341,7 @@ pub struct TimelineEdit {
     op: TimelineOp,
     ids: Ids,
     before: Option<Vec<Track>>,
+    coalesce: Option<String>,
 }
 
 impl TimelineEdit {
@@ -343,13 +350,25 @@ impl TimelineEdit {
             op,
             ids: Ids::default(),
             before: None,
+            coalesce: None,
         }
+    }
+
+    /// Marks the edit as one of a quick run (a colour picker being
+    /// dragged): runs with the same `key` undo as one step.
+    pub fn coalescing(mut self, key: impl Into<String>) -> Self {
+        self.coalesce = Some(key.into());
+        self
     }
 }
 
 impl Command for TimelineEdit {
     fn label(&self) -> String {
         self.op.label()
+    }
+
+    fn coalesce_key(&self) -> Option<String> {
+        self.coalesce.clone()
     }
 
     fn apply(&mut self, project: &mut Project) -> Result<(), EditError> {
@@ -1120,6 +1139,20 @@ impl Ctx<'_> {
                 }
                 it.kind = rw_model::ItemKind::Shape {
                     shape: shape.clone().sanitized(),
+                };
+            }
+
+            TimelineOp::SetVisualiser { item, visualiser } => {
+                let (t, i) = locate(tracks, *item).ok_or(EditError::NotFound("item"))?;
+                if tracks[t].locked {
+                    return Err(EditError::Invalid("the track is locked".into()));
+                }
+                let it = &mut tracks[t].items[i];
+                if !matches!(it.kind, rw_model::ItemKind::Visualiser { .. }) {
+                    return Err(EditError::Invalid("select a visualiser".into()));
+                }
+                it.kind = rw_model::ItemKind::Visualiser {
+                    visualiser: visualiser.clone().sanitized(),
                 };
             }
 

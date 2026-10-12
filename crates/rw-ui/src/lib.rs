@@ -6,6 +6,7 @@ pub mod canvas_tools;
 mod editing;
 pub mod export_dialog;
 pub mod format;
+pub mod graphics_library;
 pub mod home;
 pub mod icons;
 pub mod inspector;
@@ -120,6 +121,8 @@ impl EditorUi {
         // Fonts people add to the `fonts` folder beside the settings.
         if let Some(dir) = config.settings_file.parent() {
             rw_text::set_user_fonts_dir(dir.join("fonts"));
+            // Sticker packs people add: one folder of pictures per pack.
+            rw_assets::stickers::set_user_packs_dir(dir.join("packs"));
         }
         let settings = Settings::load(&config.settings_file);
         let waker_ctx = ctx.clone();
@@ -329,6 +332,11 @@ impl EditorUi {
             BinAction::AddGenerated(fill) => {
                 if let Some(s) = self.session.as_mut() {
                     s.apply(EditorAction::AppendGenerated(fill));
+                }
+            }
+            BinAction::AddGraphic(item) => {
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::AddGraphic(item));
                 }
             }
             BinAction::AddText(text) => {

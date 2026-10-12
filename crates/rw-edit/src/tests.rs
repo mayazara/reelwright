@@ -228,3 +228,68 @@ fn markers_add_move_remove_undo() {
     while h.undo(&mut p).is_some() {}
     assert!(p.markers.is_empty());
 }
+
+/// Renames the project; edits with a key merge when quick.
+#[derive(Debug)]
+struct Rename {
+    to: String,
+    key: Option<&'static str>,
+    before: Option<String>,
+}
+
+impl Command for Rename {
+    fn label(&self) -> String {
+        "Rename".into()
+    }
+    fn apply(&mut self, project: &mut rw_model::Project) -> Result<(), EditError> {
+        self.before = Some(std::mem::replace(&mut project.name, self.to.clone()));
+        Ok(())
+    }
+    fn revert(&mut self, project: &mut rw_model::Project) {
+        if let Some(b) = self.before.take() {
+            project.name = b;
+        }
+    }
+    fn coalesce_key(&self) -> Option<String> {
+        self.key.map(str::to_owned)
+    }
+}
+
+fn rename(to: &str, key: Option<&'static str>) -> Box<dyn Command> {
+    Box::new(Rename {
+        to: to.into(),
+        key,
+        before: None,
+    })
+}
+
+#[test]
+fn quick_edits_with_the_same_key_undo_as_one_step() {
+    let mut p = rw_model::Project::new("start", rw_model::Canvas::default());
+    let mut h = History::new();
+    for name in ["a", "ab", "abc"] {
+        h.execute(&mut p, rename(name, Some("name"))).unwrap();
+    }
+    // A different key starts a new step; no key never merges.
+    h.execute(&mut p, rename("other", Some("other"))).unwrap();
+    h.execute(&mut p, rename("x", None)).unwrap();
+    h.execute(&mut p, rename("y", None)).unwrap();
+    h.undo(&mut p);
+    assert_eq!(p.name, "x");
+    h.undo(&mut p);
+    assert_eq!(p.name, "other");
+    h.undo(&mut p);
+    assert_eq!(p.name, "abc");
+    h.undo(&mut p);
+    assert_eq!(p.name, "start", "the three typed names were one step");
+    assert!(!h.can_undo());
+    h.redo(&mut p);
+    assert_eq!(p.name, "abc", "redo brings the whole step back");
+
+    // Saving breaks a run, so undo never crosses the saved state silently.
+    h.mark_saved();
+    h.execute(&mut p, rename("abcd", Some("name"))).unwrap();
+    h.undo(&mut p);
+    assert_eq!(p.name, "abc");
+    assert!(!h.is_dirty());
+}

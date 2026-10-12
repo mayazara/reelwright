@@ -176,6 +176,9 @@ impl Session {
             EditorAction::Op(op) => {
                 self.op(op);
             }
+            EditorAction::LiveOp { op, key } => {
+                let _ = self.execute(Box::new(TimelineEdit::new(op).coalescing(key)));
+            }
             EditorAction::Seek(t) => self.seek(t),
             EditorAction::PlayPause => self.toggle_play(),
             EditorAction::SplitAtPlayhead => {
@@ -391,6 +394,45 @@ impl Session {
                 }
             }
             EditorAction::Notice(text) => self.notify(text),
+            EditorAction::AddGraphic(item) => {
+                let at = self.playhead();
+                let end = at + item.duration;
+                // The lowest free picture track above the main one, else a
+                // new one on top of the pictures.
+                let free = self.project.tracks.iter().position(|t| {
+                    matches!(t.kind, TrackKind::Video | TrackKind::Overlay)
+                        && !t.main
+                        && !t.locked
+                        && !t.items.iter().any(|i| i.start < end && i.end() > at)
+                });
+                let row = match free {
+                    Some(i) => DropRow::Track(i),
+                    None => DropRow::New {
+                        kind: TrackKind::Video,
+                        index: self
+                            .project
+                            .tracks
+                            .iter()
+                            .rposition(|t| matches!(t.kind, TrackKind::Video | TrackKind::Overlay))
+                            .map_or(0, |i| i + 1),
+                    },
+                };
+                self.apply(EditorAction::InsertGraphic { item, row, at });
+            }
+            EditorAction::InsertGraphic { item, row, at } => {
+                let mut item = item;
+                item.id = ItemId::new();
+                let id = item.id;
+                let placement = placement(&self.project, row);
+                if self.op(TimelineOp::Insert {
+                    placement,
+                    at,
+                    items: vec![item],
+                }) {
+                    self.selection = [id].into_iter().collect();
+                    self.timeline.selected_transition = None;
+                }
+            }
             EditorAction::AddText(text) => {
                 let at = self.playhead();
                 let end = at + text.duration;

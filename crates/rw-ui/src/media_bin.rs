@@ -56,6 +56,7 @@ pub enum LibraryTab {
     #[default]
     Media,
     Text,
+    Graphics,
     Backgrounds,
     Transitions,
 }
@@ -67,6 +68,7 @@ pub struct BinState {
     pub filter: Option<MediaKind>,
     pub sort: SortKey,
     pub renaming: Option<(MediaId, String)>,
+    pub graphics: crate::graphics_library::GraphicsState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +82,7 @@ pub enum BinAction {
     AddGenerated(rw_model::Generated),
     AddTransition(rw_model::TransitionKind),
     AddText(crate::actions::TextItem),
+    AddGraphic(rw_model::Item),
 }
 
 /// Media to show, filtered and sorted. Search matches the name
@@ -125,12 +128,17 @@ pub fn show(
     ui.horizontal(|ui| {
         ui.selectable_value(&mut state.tab, LibraryTab::Media, "Your media");
         ui.selectable_value(&mut state.tab, LibraryTab::Text, "Text");
+        ui.selectable_value(&mut state.tab, LibraryTab::Graphics, "Graphics");
         ui.selectable_value(&mut state.tab, LibraryTab::Backgrounds, "Backgrounds");
         ui.selectable_value(&mut state.tab, LibraryTab::Transitions, "Transitions");
     });
     ui.separator();
     if state.tab == LibraryTab::Backgrounds {
         return crate::backgrounds::show(ui, tokens).map(BinAction::AddGenerated);
+    }
+    if state.tab == LibraryTab::Graphics {
+        return crate::graphics_library::show(ui, &mut state.graphics, tokens)
+            .map(BinAction::AddGraphic);
     }
     if state.tab == LibraryTab::Text {
         return egui::ScrollArea::vertical()

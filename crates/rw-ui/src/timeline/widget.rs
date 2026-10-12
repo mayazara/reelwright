@@ -445,6 +445,9 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
         );
         let carrying = egui::DragAndDrop::has_payload_of_type::<MediaId>(ui.ctx())
             || egui::DragAndDrop::has_payload_of_type::<crate::text_library::TextDrag>(ui.ctx())
+            || egui::DragAndDrop::has_payload_of_type::<crate::graphics_library::GraphicDrag>(
+                ui.ctx(),
+            )
             || egui::DragAndDrop::has_payload_of_type::<rw_model::Generated>(ui.ctx())
             || matches!(state.drag, Some(Drag::Move { .. }));
         let over = carrying && pointer.is_some_and(|p| zone.contains(p));
@@ -1206,6 +1209,20 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 StrokeKind::Inside,
             );
         }
+        if let Some(drag) = released::<crate::graphics_library::GraphicDrag>(&body_resp) {
+            let row = logic::drop_row(
+                project,
+                &rows,
+                p.y - tracks.top() + state.scroll_y,
+                TrackKind::Video,
+            );
+            let at = drop_time(project, time_at(p.x), snap_on, snap_threshold, ctx.playhead);
+            out.push(EditorAction::InsertGraphic {
+                item: drag.0.clone(),
+                row,
+                at,
+            });
+        }
         if let Some(drag) = released::<crate::text_library::TextDrag>(&body_resp) {
             let row = logic::drop_row(
                 project,
@@ -1561,13 +1578,7 @@ fn draw_item(
         (Some(rw_model::Generated::Solid { .. }), _) => "Colour".to_owned(),
         (Some(rw_model::Generated::Gradient { .. }), _) => "Gradient".to_owned(),
         (None, Some(m)) => m.name.clone(),
-        (None, None) => match item.text() {
-            Some(t) => {
-                let first = t.text.lines().next().unwrap_or_default();
-                format!("T  {first}")
-            }
-            None => "Missing media".to_owned(),
-        },
+        (None, None) => crate::inspector::graphic_name(item),
     };
     if item.held_frame().is_some() {
         label = format!("Still · {label}");
