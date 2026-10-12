@@ -3157,6 +3157,7 @@ dependencies = [
 name = "rw-fx"
 version = "0.1.0"
 dependencies = [
+ "rw-model",
  "thiserror 2.0.21",
 ]
 

@@ -3,10 +3,15 @@
 //! Each layer is a full-canvas pass that reads the canvas so far (ping-pong
 //! between two `Rgba16Float` textures), so every blend mode is possible. The
 //! final canvas is copied to an sRGB output texture.
+//!
+//! A layer with effects, or in a transition, is first drawn on its own into
+//! a scratch texture (premultiplied alpha). Each effect is one or more
+//! passes over that image; a transition combines the two clips' images;
+//! a merge pass then blends the result onto the canvas.
 
 use crate::{Gpu, RenderError};
 use rw_media::RgbaImage;
-use rw_model::{Fit, Look, Rgba};
+use rw_model::{EffectKind, Fit, Look, Rgba, TransitionKind};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -34,19 +39,52 @@ pub struct Layer {
     /// Clockwise rotation (multiple of 90) of the stored image relative to
     /// how it should be displayed.
     pub rotation: u16,
-    /// Placement, crop, colour, blend. `look.opacity` already includes fades.
+    /// Placement, crop, colour, blend, effects. `look.opacity` already
+    /// includes fades.
     pub look: Look,
+    /// Seconds since the clip started, and the share of it played: animated
+    /// effects (grain, shake, slow zoom) follow these.
+    pub clip_time: f32,
+    pub clip_progress: f32,
+    /// Set when this layer is coming in through a transition from another.
+    pub transition: Option<Box<LayerTransition>>,
+}
+
+/// The clip a layer is replacing, and how far along the change is.
+#[derive(Debug, Clone)]
+pub struct LayerTransition {
+    pub from: Layer,
+    pub kind: TransitionKind,
+    /// `0..=1`.
+    pub progress: f32,
 }
 
 impl Layer {
+    /// A full-frame layer with no adjustments.
+    pub fn new(source: Source) -> Self {
+        Layer {
+            source,
+            key: 0,
+            rotation: 0,
+            look: Look::default(),
+            clip_time: 0.0,
+            clip_progress: 0.0,
+            transition: None,
+        }
+    }
+
     /// A full-frame image layer with no adjustments.
     pub fn image(image: Arc<RgbaImage>, key: u64, rotation: u16) -> Self {
         Layer {
-            source: Source::Image(image),
             key,
             rotation,
-            look: Look::default(),
+            ..Layer::new(Source::Image(image))
         }
+    }
+
+    /// Whether the layer must be drawn on its own before reaching the canvas.
+    fn isolated(&self) -> bool {
+        self.transition.is_some() || self.look.effects.iter().any(|e| e.intensity > 0.0)
     }
 
     /// The picture, for image layers.
@@ -70,7 +108,8 @@ impl Layer {
     }
 }
 
-const SHADER: &str = include_str!("shader.wgsl");
+const SHADER: &str = concat!(include_str!("common.wgsl"), include_str!("shader.wgsl"));
+const FX_SHADER: &str = concat!(include_str!("common.wgsl"), include_str!("effects.wgsl"));
 const CANVAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// Output format: what the preview samples and export reads back.
 pub const OUTPUT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -93,6 +132,30 @@ pub(crate) struct LayerUniform {
     fill0: [f32; 4],
     fill1: [f32; 4],
     grad: [f32; 4],
+}
+
+/// Parameters of an effect, transition or merge pass (`Fx` in `effects.wgsl`).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
+struct FxUniform {
+    a: [f32; 4],
+    b: [f32; 4],
+    p0: [f32; 4],
+    p1: [f32; 4],
+    geo: [f32; 4],
+}
+
+/// Number of passes an effect takes.
+fn effect_passes(kind: EffectKind) -> u32 {
+    match kind {
+        EffectKind::Blur => 2,
+        EffectKind::BackgroundBlurFill => 3,
+        _ => 1,
+    }
+}
+
+fn effect_index(kind: EffectKind) -> u32 {
+    EffectKind::ALL.iter().position(|k| *k == kind).unwrap_or(0) as u32
 }
 
 fn rgba_f(c: Rgba) -> [f32; 4] {
@@ -190,6 +253,48 @@ pub(crate) fn layer_uniform(
     }
 }
 
+/// A texture a pass reads or writes.
+#[derive(Debug, Clone, Copy)]
+enum Tex {
+    Slot(usize),
+    Blank,
+    Canvas(usize),
+    Scratch(usize),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Pipe {
+    Layer,
+    Effect,
+    Transition,
+    Merge,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Uni {
+    Slot(usize),
+    Fx(usize),
+}
+
+/// One full-canvas draw.
+#[derive(Debug, Clone, Copy)]
+struct Pass {
+    pipe: Pipe,
+    src: Tex,
+    other: Tex,
+    out: Tex,
+    uniform: Uni,
+}
+
+/// Every pass of a frame, with each slot's filter table and the effect
+/// parameters, worked out before anything is recorded.
+#[derive(Debug, Default)]
+struct Plan {
+    passes: Vec<Pass>,
+    luts: Vec<Option<String>>,
+    fx: Vec<FxUniform>,
+}
+
 struct Slot {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
@@ -201,6 +306,8 @@ struct Slot {
 struct Targets {
     size: (u32, u32),
     canvas: [wgpu::TextureView; 2],
+    /// Textures for layers drawn on their own, made on first use.
+    scratch: Vec<wgpu::TextureView>,
     output: wgpu::Texture,
     output_view: wgpu::TextureView,
 }
@@ -211,6 +318,11 @@ pub struct Compositor {
     layout: wgpu::BindGroupLayout,
     layer_pipeline: wgpu::RenderPipeline,
     blit_pipeline: wgpu::RenderPipeline,
+    fx_layout: wgpu::BindGroupLayout,
+    effect_pipeline: wgpu::RenderPipeline,
+    transition_pipeline: wgpu::RenderPipeline,
+    merge_pipeline: wgpu::RenderPipeline,
+    fx_uniforms: Vec<wgpu::Buffer>,
     sampler: wgpu::Sampler,
     blit_uniform: wgpu::Buffer,
     blank: wgpu::TextureView,
@@ -370,6 +482,69 @@ impl Compositor {
         };
         let layer_pipeline = pipeline("layers", "fs_layer", CANVAS_FORMAT);
         let blit_pipeline = pipeline("blit", "fs_blit", OUTPUT_FORMAT);
+
+        let fx_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("effects"),
+            source: wgpu::ShaderSource::Wgsl(FX_SHADER.into()),
+        });
+        let fx_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("effect"),
+            entries: &[
+                tex_entry(0, wgpu::TextureViewDimension::D2, true),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                tex_entry(3, wgpu::TextureViewDimension::D2, true),
+            ],
+        });
+        let fx_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("effects"),
+            bind_group_layouts: &[Some(&fx_layout)],
+            immediate_size: 0,
+        });
+        let fx_pipeline = |label: &str, fs: &str| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&fx_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &fx_module,
+                    entry_point: Some("vs_full"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &fx_module,
+                    entry_point: Some(fs),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: CANVAS_FORMAT,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        let effect_pipeline = fx_pipeline("effect", "fs_effect");
+        let transition_pipeline = fx_pipeline("transition", "fs_transition");
+        let merge_pipeline = fx_pipeline("merge", "fs_merge");
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("compositor"),
             mag_filter: wgpu::FilterMode::Linear,
@@ -392,6 +567,11 @@ impl Compositor {
             layout,
             layer_pipeline,
             blit_pipeline,
+            fx_layout,
+            effect_pipeline,
+            transition_pipeline,
+            merge_pipeline,
+            fx_uniforms: Vec::new(),
             sampler,
             blit_uniform,
             blank,
@@ -434,6 +614,7 @@ impl Compositor {
         Targets {
             size,
             canvas,
+            scratch: Vec::new(),
             output,
             output_view,
         }
@@ -541,58 +722,178 @@ impl Compositor {
             })
     }
 
+    /// Uploads a layer's picture and parameters to slot `index`; returns
+    /// the filter table it uses, if any.
+    fn prepare_slot(&mut self, index: usize, layer: &Layer, isolated: bool) -> Option<String> {
+        let out = self.targets.size;
+        let lut_id = layer
+            .look
+            .filter
+            .as_ref()
+            .filter(|f| f.intensity > 0.0)
+            .map(|f| f.id.clone());
+        let lut_size = lut_id.as_deref().and_then(|id| self.lut(id));
+        let mut uniform = layer_uniform(layer, out, lut_size);
+        if isolated {
+            uniform.grad[2] = 1.0;
+        }
+        let size = match &layer.source {
+            Source::Image(img) => (img.width, img.height),
+            _ => (1, 1),
+        };
+        let queue = self.gpu.queue.clone();
+        let slot = self.slot(index, size);
+        if let Source::Image(img) = &layer.source
+            && slot.key != Some(layer.key)
+        {
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &slot.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &img.pixels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(img.width * 4),
+                    rows_per_image: Some(img.height),
+                },
+                wgpu::Extent3d {
+                    width: img.width,
+                    height: img.height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            slot.key = Some(layer.key);
+        }
+        queue.write_buffer(&slot.uniform, 0, bytemuck::bytes_of(&uniform));
+        lut_size.and(lut_id)
+    }
+
+    /// Plans drawing `layer` on its own into scratch textures
+    /// `base..base + 3`, then its effects; returns the scratch holding the
+    /// result.
+    fn plan_isolated(&mut self, plan: &mut Plan, layer: &Layer, base: usize) -> usize {
+        let slot = plan.luts.len();
+        let lut = self.prepare_slot(slot, layer, true);
+        plan.luts.push(lut);
+        plan.passes.push(Pass {
+            pipe: Pipe::Layer,
+            src: Tex::Slot(slot),
+            other: Tex::Blank,
+            out: Tex::Scratch(base),
+            uniform: Uni::Slot(slot),
+        });
+        let out = self.targets.size;
+        let geo = layer_uniform(layer, out, None);
+        // Half size of what shows: a filled picture is cut to its box.
+        let visible = if geo.c2[3] > 0.5 {
+            [
+                geo.half_box[0].min(geo.half_content[0]),
+                geo.half_box[1].min(geo.half_content[1]),
+            ]
+        } else {
+            geo.half_content
+        };
+        let mut current = base;
+        for effect in layer.look.effects.iter().filter(|e| e.intensity > 0.0) {
+            let input = current;
+            let params = rw_fx::effects::resolved_params(effect);
+            for m in 0..effect_passes(effect.kind) {
+                // Write somewhere that isn't being read.
+                let next = (base..base + 3)
+                    .find(|s| *s != current && *s != input)
+                    .unwrap_or(base);
+                let index = plan.fx.len();
+                plan.fx.push(FxUniform {
+                    a: [
+                        out.0 as f32,
+                        out.1 as f32,
+                        effect_index(effect.kind) as f32,
+                        effect.intensity.clamp(0.0, 1.0),
+                    ],
+                    b: [layer.clip_time, layer.clip_progress, 0.0, m as f32],
+                    p0: [params[0], params[1], params[2], params[3]],
+                    p1: [params[4], params[5], params[6], params[7]],
+                    geo: [geo.center[0], geo.center[1], visible[0], visible[1]],
+                });
+                plan.passes.push(Pass {
+                    pipe: Pipe::Effect,
+                    src: Tex::Scratch(current),
+                    other: Tex::Scratch(input),
+                    out: Tex::Scratch(next),
+                    uniform: Uni::Fx(index),
+                });
+                current = next;
+            }
+        }
+        current
+    }
+
     /// Draws `layers` (bottom first) over `background`.
     pub fn render(&mut self, background: Rgba, layers: &[Layer]) {
         let out = self.targets.size;
-        let queue = self.gpu.queue.clone();
-        // Upload textures and uniforms; remember each layer's LUT.
-        let mut lut_ids: Vec<Option<String>> = Vec::with_capacity(layers.len());
-        for (i, layer) in layers.iter().enumerate() {
-            let lut_id = layer
-                .look
-                .filter
-                .as_ref()
-                .filter(|f| f.intensity > 0.0)
-                .map(|f| f.id.clone());
-            let lut_size = lut_id.as_deref().and_then(|id| self.lut(id));
-            let uniform = layer_uniform(layer, out, lut_size);
-            let size = match &layer.source {
-                Source::Image(img) => (img.width, img.height),
-                _ => (1, 1),
-            };
-            let slot = self.slot(i, size);
-            if let Source::Image(img) = &layer.source
-                && slot.key != Some(layer.key)
-            {
-                queue.write_texture(
-                    wgpu::TexelCopyTextureInfo {
-                        texture: &slot.texture,
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    &img.pixels,
-                    wgpu::TexelCopyBufferLayout {
-                        offset: 0,
-                        bytes_per_row: Some(img.width * 4),
-                        rows_per_image: Some(img.height),
-                    },
-                    wgpu::Extent3d {
-                        width: img.width,
-                        height: img.height,
-                        depth_or_array_layers: 1,
-                    },
-                );
-                slot.key = Some(layer.key);
+        let mut plan = Plan::default();
+        let mut canvas = 0;
+        for layer in layers {
+            if !layer.isolated() {
+                let slot = plan.luts.len();
+                let lut = self.prepare_slot(slot, layer, false);
+                plan.luts.push(lut);
+                plan.passes.push(Pass {
+                    pipe: Pipe::Layer,
+                    src: Tex::Slot(slot),
+                    other: Tex::Canvas(canvas),
+                    out: Tex::Canvas(1 - canvas),
+                    uniform: Uni::Slot(slot),
+                });
+                canvas = 1 - canvas;
+                continue;
             }
-            queue.write_buffer(&slot.uniform, 0, bytemuck::bytes_of(&uniform));
-            lut_ids.push(lut_size.and(lut_id));
+            let mut result = self.plan_isolated(&mut plan, layer, 0);
+            if let Some(tr) = &layer.transition {
+                let from = self.plan_isolated(&mut plan, &tr.from, 3);
+                let target = (0..3).find(|s| *s != result).unwrap_or(0);
+                let index = plan.fx.len();
+                plan.fx.push(FxUniform {
+                    a: [out.0 as f32, out.1 as f32, tr.kind.index() as f32, 1.0],
+                    b: [0.0, tr.progress.clamp(0.0, 1.0), 0.0, 0.0],
+                    ..FxUniform::default()
+                });
+                plan.passes.push(Pass {
+                    pipe: Pipe::Transition,
+                    src: Tex::Scratch(from),
+                    other: Tex::Scratch(result),
+                    out: Tex::Scratch(target),
+                    uniform: Uni::Fx(index),
+                });
+                result = target;
+            }
+            let index = plan.fx.len();
+            plan.fx.push(FxUniform {
+                a: [out.0 as f32, out.1 as f32, 0.0, 0.0],
+                b: [0.0, 0.0, 0.0, layer.look.blend.index() as f32],
+                ..FxUniform::default()
+            });
+            plan.passes.push(Pass {
+                pipe: Pipe::Merge,
+                src: Tex::Scratch(result),
+                other: Tex::Canvas(canvas),
+                out: Tex::Canvas(1 - canvas),
+                uniform: Uni::Fx(index),
+            });
+            canvas = 1 - canvas;
         }
+        self.upload_plan(&plan);
+
         let blit = LayerUniform {
             out_size: [out.0 as f32, out.1 as f32],
             ..LayerUniform::default()
         };
-        queue.write_buffer(&self.blit_uniform, 0, bytemuck::bytes_of(&blit));
+        self.gpu
+            .queue
+            .write_buffer(&self.blit_uniform, 0, bytemuck::bytes_of(&blit));
 
         let [r, g, b, _] = background.0;
         let clear = wgpu::Color {
@@ -634,37 +935,49 @@ impl Compositor {
             &self.targets.canvas[0],
             wgpu::LoadOp::Clear(clear),
         ));
-        let mut current = 0;
-        for (i, layer) in layers.iter().enumerate() {
-            let src = match layer.source {
-                Source::Image(_) => &self.slots[i].view,
-                _ => &self.blank,
+        for step in &plan.passes {
+            let (group, pipeline) = match (step.pipe, step.uniform) {
+                (Pipe::Layer, Uni::Slot(i)) => {
+                    let lut = match &plan.luts[i] {
+                        Some(id) => &self.luts[id].0,
+                        None => &self.identity_lut,
+                    };
+                    let group = self.bind_group(
+                        self.view(step.src),
+                        &self.slots[i].uniform,
+                        self.view(step.other),
+                        lut,
+                    );
+                    (group, &self.layer_pipeline)
+                }
+                (pipe, Uni::Fx(i)) => {
+                    let group = self.fx_bind_group(
+                        self.view(step.src),
+                        &self.fx_uniforms[i],
+                        self.view(step.other),
+                    );
+                    let pipeline = match pipe {
+                        Pipe::Transition => &self.transition_pipeline,
+                        Pipe::Merge => &self.merge_pipeline,
+                        _ => &self.effect_pipeline,
+                    };
+                    (group, pipeline)
+                }
+                (_, Uni::Slot(_)) => unreachable!("only layer passes use slot uniforms"),
             };
-            let lut = match &lut_ids[i] {
-                Some(id) => &self.luts[id].0,
-                None => &self.identity_lut,
-            };
-            let group = self.bind_group(
-                src,
-                &self.slots[i].uniform,
-                &self.targets.canvas[current],
-                lut,
-            );
             let mut p = pass(
                 &mut encoder,
-                &self.targets.canvas[1 - current],
-                wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                self.view(step.out),
+                wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
             );
-            p.set_pipeline(&self.layer_pipeline);
+            p.set_pipeline(pipeline);
             p.set_bind_group(0, &group, &[]);
             p.draw(0..3, 0..1);
-            drop(p);
-            current = 1 - current;
         }
         let group = self.bind_group(
             &self.blank,
             &self.blit_uniform,
-            &self.targets.canvas[current],
+            &self.targets.canvas[canvas],
             &self.identity_lut,
         );
         let mut p = pass(
@@ -677,6 +990,88 @@ impl Compositor {
         p.draw(0..3, 0..1);
         drop(p);
         self.gpu.queue.submit([encoder.finish()]);
+    }
+
+    /// Makes the scratch textures and effect uniforms a plan needs and
+    /// uploads the effect parameters.
+    fn upload_plan(&mut self, plan: &Plan) {
+        let device = &self.gpu.device;
+        let scratch_needed = plan
+            .passes
+            .iter()
+            .flat_map(|p| [p.src, p.other, p.out])
+            .filter_map(|t| match t {
+                Tex::Scratch(i) => Some(i + 1),
+                _ => None,
+            })
+            .max()
+            .unwrap_or(0);
+        while self.targets.scratch.len() < scratch_needed {
+            let view = texture_2d(
+                device,
+                "scratch",
+                self.targets.size,
+                CANVAS_FORMAT,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            )
+            .create_view(&Default::default());
+            self.targets.scratch.push(view);
+        }
+        while self.fx_uniforms.len() < plan.fx.len() {
+            self.fx_uniforms
+                .push(device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("effect uniform"),
+                    size: std::mem::size_of::<FxUniform>() as u64,
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                }));
+        }
+        for (buffer, fx) in self.fx_uniforms.iter().zip(&plan.fx) {
+            self.gpu
+                .queue
+                .write_buffer(buffer, 0, bytemuck::bytes_of(fx));
+        }
+    }
+
+    fn view(&self, tex: Tex) -> &wgpu::TextureView {
+        match tex {
+            Tex::Slot(i) => &self.slots[i].view,
+            Tex::Blank => &self.blank,
+            Tex::Canvas(i) => &self.targets.canvas[i],
+            Tex::Scratch(i) => &self.targets.scratch[i],
+        }
+    }
+
+    fn fx_bind_group(
+        &self,
+        src: &wgpu::TextureView,
+        uniform: &wgpu::Buffer,
+        other: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        self.gpu
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("effect"),
+                layout: &self.fx_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(src),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: uniform.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(other),
+                    },
+                ],
+            })
     }
 
     /// Copies the last rendered frame to the CPU (sRGB RGBA8).
@@ -798,6 +1193,9 @@ mod tests {
             key: 0,
             rotation: 0,
             look: Look::default(),
+            clip_time: 0.0,
+            clip_progress: 0.0,
+            transition: None,
         };
         l.look.transform = Transform {
             center: [0.25, 0.5],

@@ -235,12 +235,18 @@ impl FrameSource {
                     key: 0,
                     rotation: 0,
                     look: Look::default(),
+                    clip_time: 0.0,
+                    clip_progress: 0.0,
+                    transition: None,
                 },
                 Some(Generated::Gradient { from, to, angle }) => Layer {
                     source: Source::Gradient { from, to, angle },
                     key: 0,
                     rotation: 0,
                     look: Look::default(),
+                    clip_time: 0.0,
+                    clip_progress: 0.0,
+                    transition: None,
                 },
                 None => match decoded.remove(&slot) {
                     Some(l) => l,

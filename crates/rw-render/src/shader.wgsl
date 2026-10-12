@@ -1,4 +1,4 @@
-// Compositor shaders.
+// Compositor shaders (`common.wgsl` is prepended).
 //
 // Each layer is one full-canvas pass: for every canvas pixel, find where it
 // lands in the layer (inverse transform, crop, orientation), shade the layer
@@ -29,8 +29,9 @@ struct Layer {
     c1: vec4<f32>,
     // shadows, LUT intensity, LUT size, clip to box (1 for fill)
     c2: vec4<f32>,
-    // Solid colour or gradient start / end (sRGB, straight alpha) and the
-    // gradient direction.
+    // Solid colour or gradient start / end (sRGB, straight alpha); the
+    // gradient direction (xy) and whether the layer is drawn on its own (z,
+    // premultiplied over transparency, blend mode left for later).
     fill0: vec4<f32>,
     fill1: vec4<f32>,
     grad: vec4<f32>,
@@ -41,36 +42,6 @@ struct Layer {
 @group(0) @binding(2) var<uniform> L: Layer;
 @group(0) @binding(3) var dst_tex: texture_2d<f32>;
 @group(0) @binding(4) var lut_tex: texture_3d<f32>;
-
-struct VsOut {
-    @builtin(position) pos: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-};
-
-@vertex
-fn vs_full(@builtin(vertex_index) i: u32) -> VsOut {
-    let p = vec2(f32((i << 1u) & 2u), f32(i & 2u));
-    var out: VsOut;
-    out.pos = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-    out.uv = vec2(p.x, 1.0 - p.y);
-    return out;
-}
-
-fn to_srgb(c: vec3<f32>) -> vec3<f32> {
-    let lo = c * 12.92;
-    let hi = 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055;
-    return select(hi, lo, c <= vec3(0.0031308));
-}
-
-fn to_linear(c: vec3<f32>) -> vec3<f32> {
-    let lo = c / 12.92;
-    let hi = pow(max((c + 0.055) / 1.055, vec3(0.0)), vec3(2.4));
-    return select(hi, lo, c <= vec3(0.04045));
-}
-
-fn luma(c: vec3<f32>) -> f32 {
-    return dot(c, vec3(0.2126, 0.7152, 0.0722));
-}
 
 // Colour adjustments and filter. Input and output linear light.
 fn grade(lin_in: vec3<f32>) -> vec3<f32> {
@@ -95,22 +66,6 @@ fn grade(lin_in: vec3<f32>) -> vec3<f32> {
         s = mix(s, graded, L.c2.y);
     }
     return to_linear(s);
-}
-
-// Blend functions on sRGB-encoded values.
-fn blend(d: vec3<f32>, s: vec3<f32>, mode: u32) -> vec3<f32> {
-    switch mode {
-        case 1u: { return d * s; }
-        case 2u: { return 1.0 - (1.0 - d) * (1.0 - s); }
-        case 3u: { return select(1.0 - 2.0 * (1.0 - d) * (1.0 - s), 2.0 * d * s, d < vec3(0.5)); }
-        case 4u: { return min(d, s); }
-        case 5u: { return max(d, s); }
-        case 6u: { return select(min(vec3(1.0), d / max(1.0 - s, vec3(1e-5))), vec3(1.0), s >= vec3(1.0)); }
-        case 7u: { return select(1.0 - min(vec3(1.0), (1.0 - d) / max(s, vec3(1e-5))), vec3(0.0), s <= vec3(0.0)); }
-        case 8u: { return min(vec3(1.0), d + s); }
-        case 9u: { return abs(d - s); }
-        default: { return s; }
-    }
 }
 
 // Straight-alpha sRGB colour of the layer at display UV `uv`.
@@ -138,7 +93,11 @@ fn source(uv: vec2<f32>) -> vec4<f32> {
 @fragment
 fn fs_layer(in: VsOut) -> @location(0) vec4<f32> {
     let px = in.uv * L.out_size;
-    let dst = textureLoad(dst_tex, vec2<i32>(floor(px)), 0);
+    let isolated = L.grad.z > 0.5;
+    var dst = vec4(0.0);
+    if !isolated {
+        dst = textureLoad(dst_tex, vec2<i32>(floor(px)), 0);
+    }
     // Into the box's frame: undo the clockwise rotation.
     let d = px - L.center;
     let local = vec2(L.rot.x * d.x + L.rot.y * d.y, -L.rot.y * d.x + L.rot.x * d.y);
@@ -161,6 +120,9 @@ fn fs_layer(in: VsOut) -> @location(0) vec4<f32> {
         return dst;
     }
     let graded = grade(src.rgb);
+    if isolated {
+        return vec4(graded * a, a);
+    }
     let mode = u32(L.p0.z + 0.5);
     var mixed = graded;
     if mode != 0u {

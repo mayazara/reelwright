@@ -1,7 +1,9 @@
 //! Effects, filters, transitions and LUTs with parameter schemas.
 //!
-//! M3 provides the bundled LUT filters and the `.cube` reader.
+//! M3 provides the bundled LUT filters and the `.cube` reader; M4 adds the
+//! effect and transition catalogue.
 
+pub mod effects;
 pub mod grades;
 pub mod lut;
 

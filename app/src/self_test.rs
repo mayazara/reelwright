@@ -63,11 +63,15 @@ fn checks(r: &mut String) -> bool {
             }),
             ..Look::default()
         };
-        let layer = Layer {
-            source: Source::Solid(Rgba([40, 160, 140, 255])),
-            key: 0,
-            rotation: 0,
-            look,
+        let mut layer = Layer::new(Source::Solid(Rgba([40, 160, 140, 255])));
+        // A vignette runs the effect shaders too; it leaves the centre alone.
+        layer.look = Look {
+            effects: vec![rw_model::Effect {
+                kind: rw_model::EffectKind::Vignette,
+                intensity: 1.0,
+                params: Vec::new(),
+            }],
+            ..look
         };
         let video = VideoSettings {
             width: 320,

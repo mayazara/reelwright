@@ -1,5 +1,5 @@
-//! Golden-frame tests: every filter, blend mode, colour control and a set of
-//! transforms, rendered from a synthetic scene and compared with stored PNGs.
+//! Golden-frame tests: every filter, blend mode, colour control, effect and
+//! transition and a set of transforms, rendered from a synthetic scene and compared with stored PNGs.
 //!
 //! References live in `tests/golden/`. Regenerate them (on the software
 //! renderer CI uses) with:
@@ -7,22 +7,29 @@
 //! and review the diff before committing.
 
 use rw_media::RgbaImage;
-use rw_model::{BlendMode, ColorControl, Crop, Filter, Fit, Layout, Look, Rgba, Transform};
-use rw_render::{Compositor, Gpu, Layer, Source};
+use rw_model::{
+    BlendMode, ColorControl, Crop, EffectKind, Filter, Fit, Layout, Look, Rgba, Transform,
+    TransitionKind,
+};
+use rw_render::{Compositor, Gpu, Layer, LayerTransition, Source};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const SIZE: (u32, u32) = (128, 72);
 
 fn gpu() -> Option<Gpu> {
-    match Gpu::headless() {
+    // One device for the whole binary: several software-renderer devices
+    // compiling pipelines at once have crashed the driver.
+    static GPU: std::sync::OnceLock<Option<Gpu>> = std::sync::OnceLock::new();
+    GPU.get_or_init(|| match Gpu::headless() {
         Ok(g) => Some(g),
         Err(e) if std::env::var("RW_REQUIRE_GPU").is_ok_and(|v| v == "1") => panic!("{e}"),
         Err(e) => {
             eprintln!("skipping golden tests: {e}");
             None
         }
-    }
+    })
+    .clone()
 }
 
 /// A picture with hue sweep, a grey ramp, skin-like tones and a soft edge:
@@ -149,7 +156,11 @@ fn render(gpu: &Gpu, layers: &[Layer]) -> RgbaImage {
     c.read_back().unwrap()
 }
 
+/// One GPU test at a time (see `gpu`).
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn check_all(cases: Vec<(String, Vec<Layer>)>) {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let Some(gpu) = gpu() else { return };
     let failures: Vec<String> = cases
         .into_iter()
@@ -198,6 +209,9 @@ fn every_blend_mode() {
                 key: 0,
                 rotation: 0,
                 look: Look::default(),
+                clip_time: 0.0,
+                clip_progress: 0.0,
+                transition: None,
             };
             top.look.blend = *mode;
             top.look.transform = Transform {
@@ -281,4 +295,123 @@ fn transforms_crops_and_opacity() {
         ("opacity-40".to_owned(), with(&|l| l.opacity = 0.4)),
     ];
     check_all(cases);
+}
+
+/// A second picture for transitions: the base picture turned upside down
+/// and tinted, so either clip is easy to tell apart.
+fn other_layer() -> Layer {
+    let mut l = base_layer();
+    l.key = 2;
+    l.look.transform.flip_v = true;
+    l.look.color.temperature = -0.8;
+    l
+}
+
+fn with_effect(kind: EffectKind) -> Layer {
+    let mut l = base_layer();
+    l.look.effects = vec![rw_fx::effects::new_effect(kind)];
+    l.clip_time = 1.25;
+    l.clip_progress = 0.5;
+    l
+}
+
+#[test]
+fn every_effect() {
+    let cases = EffectKind::ALL
+        .iter()
+        .map(|kind| {
+            let mut l = with_effect(*kind);
+            if *kind == EffectKind::BackgroundBlurFill {
+                // A tall picture in a wide frame.
+                l.look.transform.size = [0.35, 1.0];
+                l.look.transform.fit = Fit::Cover;
+            }
+            (format!("effect-{kind:?}").to_lowercase(), vec![l])
+        })
+        .chain(std::iter::once({
+            // Effects stack in order.
+            let mut l = with_effect(EffectKind::Pixelate);
+            l.look
+                .effects
+                .push(rw_fx::effects::new_effect(EffectKind::Vignette));
+            ("effect-stacked".to_owned(), vec![l])
+        }))
+        .collect();
+    check_all(cases);
+}
+
+fn transition(kind: TransitionKind, progress: f32) -> Layer {
+    let mut to = other_layer();
+    to.transition = Some(Box::new(LayerTransition {
+        from: base_layer(),
+        kind,
+        progress,
+    }));
+    to
+}
+
+#[test]
+fn every_transition() {
+    let cases = TransitionKind::ALL
+        .iter()
+        .map(|kind| {
+            (
+                format!("transition-{kind:?}").to_lowercase(),
+                vec![transition(*kind, 0.4)],
+            )
+        })
+        .collect();
+    check_all(cases);
+}
+
+fn max_diff(a: &RgbaImage, b: &RgbaImage) -> u8 {
+    a.pixels
+        .iter()
+        .zip(&b.pixels)
+        .map(|(x, y)| x.abs_diff(*y))
+        .max()
+        .unwrap_or(0)
+}
+
+/// Every transition starts on the outgoing clip and ends on the incoming
+/// one, so cuts into and out of the window don't jump.
+#[test]
+fn transitions_start_and_end_on_their_clips() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(gpu) = gpu() else { return };
+    let from = render(&gpu, &[base_layer()]);
+    let to = render(&gpu, &[other_layer()]);
+    let mut bad = Vec::new();
+    for kind in TransitionKind::ALL {
+        let start = max_diff(&render(&gpu, &[transition(kind, 0.0)]), &from);
+        let end = max_diff(&render(&gpu, &[transition(kind, 1.0)]), &to);
+        if start > 2 || end > 2 {
+            bad.push(format!("{kind:?}: start off by {start}, end off by {end}"));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// Drawing a clip on its own and merging it gives the same picture as
+/// drawing it straight onto the canvas (blend mode, opacity, placement).
+#[test]
+fn drawing_alone_then_merging_matches_direct_drawing() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(gpu) = gpu() else { return };
+    for mode in [BlendMode::Normal, BlendMode::Multiply, BlendMode::Screen] {
+        let mut top = other_layer();
+        top.look.blend = mode;
+        top.look.opacity = 0.6;
+        top.look.transform = Layout::TopRight.apply(top.look.transform);
+        let direct = render(&gpu, &[base_layer(), top.clone()]);
+        // A barely-there effect forces the separate path.
+        top.look.effects = vec![rw_model::Effect {
+            kind: EffectKind::Invert,
+            intensity: 1e-4,
+            params: Vec::new(),
+        }];
+        let merged = render(&gpu, &[base_layer(), top]);
+        let d = max_diff(&direct, &merged);
+        assert!(d <= 2, "{mode:?}: differs by {d}");
+    }
 }

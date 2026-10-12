@@ -8,14 +8,18 @@ use std::sync::Arc;
 /// Headless GPU, or `None` (test skipped) when the machine has none.
 /// `RW_REQUIRE_GPU=1` turns a missing GPU into a failure.
 fn gpu() -> Option<Gpu> {
-    match Gpu::headless() {
+    // One device for the whole binary: several software-renderer devices
+    // compiling pipelines at once have crashed the driver.
+    static GPU: std::sync::OnceLock<Option<Gpu>> = std::sync::OnceLock::new();
+    GPU.get_or_init(|| match Gpu::headless() {
         Ok(g) => Some(g),
         Err(e) if std::env::var("RW_REQUIRE_GPU").is_ok_and(|v| v == "1") => panic!("{e}"),
         Err(e) => {
             eprintln!("skipping GPU test: {e}");
             None
         }
-    }
+    })
+    .clone()
 }
 
 fn solid(w: u32, h: u32, c: [u8; 4]) -> Arc<RgbaImage> {
@@ -315,6 +319,9 @@ fn solid_and_gradient_sources() {
         key: 0,
         rotation: 0,
         look: Default::default(),
+        clip_time: 0.0,
+        clip_progress: 0.0,
+        transition: None,
     };
     assert!(close(
         px(&render(&gpu, (32, 16), Rgba::BLACK, &[solid_layer]), 30, 2),
@@ -330,6 +337,9 @@ fn solid_and_gradient_sources() {
         key: 0,
         rotation: 0,
         look: Default::default(),
+        clip_time: 0.0,
+        clip_progress: 0.0,
+        transition: None,
     };
     let out = render(&gpu, (100, 10), Rgba::BLACK, &[grad]);
     let (l, m, r) = (px(&out, 1, 5)[0], px(&out, 50, 5)[0], px(&out, 98, 5)[0]);
