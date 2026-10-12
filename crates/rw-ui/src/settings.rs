@@ -15,6 +15,8 @@ pub struct Settings {
     /// Project folders opened recently, newest first. Includes projects
     /// outside the projects folder.
     pub recent: Vec<PathBuf>,
+    /// Folder of the last export.
+    pub export_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

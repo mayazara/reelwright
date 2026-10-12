@@ -4,6 +4,7 @@ pub mod actions;
 pub mod backgrounds;
 pub mod canvas_tools;
 mod editing;
+pub mod export_dialog;
 pub mod format;
 pub mod home;
 pub mod icons;
@@ -11,6 +12,7 @@ pub mod inspector;
 pub mod layout;
 pub mod media_bin;
 pub mod preview;
+mod reveal;
 pub mod session;
 pub mod settings;
 pub mod text_library;
@@ -88,10 +90,12 @@ pub struct EditorUi {
     audio: Arc<dyn OutputFactory>,
     ui_gpu: Option<UiGpu>,
     export: Option<ExportJob>,
+    export_dialog: Option<export_dialog::ExportDialog>,
 }
 
 /// An export running on a background thread.
 struct ExportJob {
+    started: Instant,
     progress: Arc<AtomicU32>,
     cancel: Arc<AtomicBool>,
     result: crossbeam_channel::Receiver<Result<ExportReport, String>>,
@@ -136,6 +140,7 @@ impl EditorUi {
             audio,
             ui_gpu,
             export: None,
+            export_dialog: None,
         }
     }
 
@@ -345,39 +350,101 @@ impl EditorUi {
         }
     }
 
-    /// Applies an action to the open project (export starts a job).
+    /// Applies an action to the open project (export opens its dialog).
     pub fn apply(&mut self, action: EditorAction) {
         if action == EditorAction::Export {
-            self.choose_export_path();
+            self.open_export_dialog();
         } else if let Some(s) = self.session.as_mut() {
             s.apply(action);
         }
     }
 
-    fn choose_export_path(&mut self) {
-        let Some(s) = self.session.as_ref() else {
+    /// Folder exports go to unless the user picks another.
+    fn export_folder(&self) -> PathBuf {
+        self.settings
+            .export_dir
+            .clone()
+            .filter(|d| d.is_dir())
+            .or_else(|| self.config.projects_dir.parent().map(Path::to_path_buf))
+            .unwrap_or_default()
+    }
+
+    pub fn open_export_dialog(&mut self) {
+        let Some(s) = self.session.as_mut() else {
             return;
         };
-        let dir = self
-            .config
-            .projects_dir
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_default();
-        let name = format!("{}.mp4", rw_model::library::sanitize(&s.project.name));
-        if let Some(path) = rfd::FileDialog::new()
-            .set_title("Export video")
-            .set_directory(dir)
-            .set_file_name(name)
-            .add_filter("MP4 video", &["mp4"])
-            .save_file()
-        {
-            self.export_to(path);
+        if s.project.duration() <= rw_model::Time::ZERO {
+            s.notify_error("Add something to the timeline before exporting.");
+            return;
+        }
+        s.player.pause();
+        let folder = self.export_folder();
+        let project = &self.session.as_ref().expect("checked").project;
+        let mut dialog = export_dialog::ExportDialog::new(project, folder);
+        if self.export.is_some() {
+            dialog.stage = export_dialog::Stage::Running;
+        }
+        self.export_dialog = Some(dialog);
+    }
+
+    /// The open export dialog, for tests.
+    pub fn export_dialog(&self) -> Option<&export_dialog::ExportDialog> {
+        self.export_dialog.as_ref()
+    }
+
+    fn show_export_dialog(&mut self, ctx: &egui::Context, tokens: Tokens) {
+        let (Some(d), Some(s)) = (self.export_dialog.as_mut(), self.session.as_ref()) else {
+            return;
+        };
+        let progress = self
+            .export
+            .as_ref()
+            .map(|e| (e.fraction(), e.started.elapsed()));
+        let action = export_dialog::show(ctx, d, &s.project, &s.selection, progress, tokens);
+        match action {
+            None => {}
+            Some(export_dialog::DialogAction::Start(settings)) => {
+                if let Some(dir) = settings.path.parent() {
+                    self.settings.export_dir = Some(dir.to_path_buf());
+                    let _ = self.settings.save(&self.config.settings_file);
+                }
+                self.start_export(settings);
+            }
+            Some(export_dialog::DialogAction::Cancel) => self.cancel_export(),
+            Some(export_dialog::DialogAction::Close) => self.export_dialog = None,
+            Some(export_dialog::DialogAction::Reveal(path)) => {
+                if let Err(e) = reveal::reveal(&path)
+                    && let Some(s) = self.session.as_mut()
+                {
+                    s.notify_error(format!("Couldn't open the folder: {e}"));
+                }
+            }
+            Some(export_dialog::DialogAction::ChooseFolder) => {
+                let start = d.folder.clone();
+                if let Some(dir) = rfd::FileDialog::new()
+                    .set_title("Export to folder")
+                    .set_directory(start)
+                    .pick_folder()
+                    && let Some(d) = self.export_dialog.as_mut()
+                {
+                    d.folder = dir;
+                }
+            }
         }
     }
 
-    /// Starts exporting the open project to `path` in the background.
+    /// Starts exporting the open project to `path` with default settings
+    /// (whole project, canvas size, H.264).
     pub fn export_to(&mut self, path: PathBuf) {
+        let Some(s) = self.session.as_ref() else {
+            return;
+        };
+        let settings = ExportSettings::for_project(&s.project, &path);
+        self.start_export(settings);
+    }
+
+    /// Starts an export in the background.
+    pub fn start_export(&mut self, settings: ExportSettings) {
         let Some(s) = self.session.as_mut() else {
             return;
         };
@@ -404,7 +471,6 @@ impl EditorUi {
                 let result = match gpu {
                     None => Err("No graphics device is available for rendering.".to_owned()),
                     Some(gpu) => {
-                        let settings = ExportSettings::for_project(&project, &path);
                         rw_engine::export::export(&project, &cache, &gpu, &settings, &c, &|f| {
                             p.store(f.to_bits(), Ordering::Relaxed);
                         })
@@ -415,10 +481,14 @@ impl EditorUi {
             })
             .expect("spawn export");
         self.export = Some(ExportJob {
+            started: Instant::now(),
             progress,
             cancel,
             result: rx,
         });
+        if let Some(d) = self.export_dialog.as_mut() {
+            d.stage = export_dialog::Stage::Running;
+        }
     }
 
     pub fn exporting(&self) -> Option<f32> {
@@ -436,6 +506,14 @@ impl EditorUi {
         match job.result.try_recv() {
             Ok(result) => {
                 self.export = None;
+                if let Some(d) = self.export_dialog.as_mut() {
+                    d.stage = match result {
+                        Ok(r) => export_dialog::Stage::Done(r),
+                        Err(e) if e.contains("cancelled") => export_dialog::Stage::Setup,
+                        Err(e) => export_dialog::Stage::Failed(e),
+                    };
+                    return;
+                }
                 if let Some(s) = self.session.as_mut() {
                     match result {
                         Ok(r) => s.notify(format!(
@@ -525,6 +603,7 @@ impl EditorUi {
 
         let mut go_home = false;
         self.poll_export(&ctx);
+        self.show_export_dialog(&ctx, tokens);
         self.top_bar(ui, tokens, &mut go_home);
         let session = self.session.as_mut().expect("checked above");
         session.tick_playback();
