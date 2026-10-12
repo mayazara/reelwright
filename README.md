@@ -7,8 +7,9 @@ no internet connection — your projects and media never leave your machine.
 > playback, cutting and trimming, transforms, crop, colour adjustment,
 > filters, blend modes, fades, colour/gradient backgrounds, effects
 > (including green screen), transitions, speed changes with pitch-kept
-> sound, reverse, freeze frames and MP4 export work today. Text, more
-> export formats, recording and on-device AI tools are on the way — see
+> sound, reverse, freeze frames, titles and animated text, and export to
+> MP4, WebM, GIF and MP3 work today. Stickers, recording and on-device AI
+> tools are on the way — see
 > [`PLAN.md`](PLAN.md) and [`PROGRESS.md`](PROGRESS.md).
 
 ## Install
@@ -58,6 +59,11 @@ curl https://sh.rustup.rs -sSf | sh
 Fedora: `sudo dnf install clang-devel ffmpeg-free-devel alsa-lib-devel
 libxkbcommon-devel wayland-devel pkgconf` (or the full `ffmpeg-devel` from
 RPM Fusion for more codecs).
+
+Titles in Chinese, Japanese or Korean, and emoji, use your system's fonts
+(Windows and macOS have them built in). On Linux install them if needed:
+`sudo apt install fonts-noto-cjk fonts-noto-color-emoji`. Fonts you add to
+the app's `fonts` folder (next to its settings) are offered too.
 
 **WSL:** the app runs under WSLg. For sound, route ALSA to WSLg's
 PulseAudio server once:

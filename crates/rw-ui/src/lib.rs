@@ -117,6 +117,10 @@ impl EditorUi {
         audio: Arc<dyn OutputFactory>,
     ) -> Self {
         ctx.set_fonts(theme::fonts());
+        // Fonts people add to the `fonts` folder beside the settings.
+        if let Some(dir) = config.settings_file.parent() {
+            rw_text::set_user_fonts_dir(dir.join("fonts"));
+        }
         let settings = Settings::load(&config.settings_file);
         let waker_ctx = ctx.clone();
         let jobs = MediaJobs::new(
