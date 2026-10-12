@@ -1,5 +1,6 @@
 //! Mixes every audible item on the timeline into interleaved stereo.
 
+use crate::stretch::{ClipAudio, SampleSource};
 use crate::{CHANNELS, sample_to_time, time_to_sample};
 use rw_media::AudioReader;
 use rw_model::{Item, ItemId, MediaKind, Project, TrackKind};
@@ -16,7 +17,8 @@ pub fn audible_items(project: &Project) -> Vec<(&Item, f32)> {
             continue;
         }
         for item in &track.items {
-            if item.muted || item.gain <= 0.0 {
+            // Held frames are silent.
+            if item.muted || item.gain <= 0.0 || item.held_frame().is_some() {
                 continue;
             }
             let Some(media) = item.media().and_then(|id| project.media(id)) else {
@@ -38,9 +40,37 @@ pub fn audible_items(project: &Project) -> Vec<(&Item, f32)> {
     out
 }
 
+/// A decoder addressed in samples.
+struct Reader {
+    reader: AudioReader,
+    failed: bool,
+}
+
+impl SampleSource for Reader {
+    fn position(&self) -> i64 {
+        time_to_sample(self.reader.position())
+    }
+
+    fn seek(&mut self, sample: i64) {
+        self.reader.seek(sample_to_time(sample));
+    }
+
+    fn read(&mut self, out: &mut [f32]) -> usize {
+        if self.failed {
+            return 0;
+        }
+        self.reader.read(out).unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "audio decode failed");
+            self.failed = true;
+            0
+        })
+    }
+}
+
 struct Source {
-    /// `None` once the file failed to open or decode; it stays silent.
-    reader: Option<AudioReader>,
+    clip: Option<ClipAudio<Reader>>,
+    /// The file failed to open; the item stays silent.
+    broken: bool,
     last_used: u64,
 }
 
@@ -83,32 +113,42 @@ impl Mixer {
             let Some(media) = item.media().and_then(|id| project.media(id)) else {
                 continue;
             };
+            // The clip's first sample in the source, in playing order.
+            let origin = time_to_sample(if item.reverse {
+                item.source_in + item.source_span()
+            } else {
+                item.source_in
+            });
             let source = self.sources.entry(item.id).or_insert_with(|| Source {
-                reader: AudioReader::open(&media.path)
-                    .inspect_err(|e| tracing::warn!(path = %media.path.display(), error = %e, "can't open audio"))
-                    .ok(),
+                clip: None,
+                broken: false,
                 last_used: 0,
             });
             source.last_used = self.calls;
-            let Some(reader) = source.reader.as_mut() else {
+            let stale = source
+                .clip
+                .as_ref()
+                .is_none_or(|c| !c.matches(origin, item.reverse, item.speed, item.keep_pitch));
+            if source.broken {
+                continue;
+            }
+            if stale {
+                source.clip = AudioReader::open(&media.path)
+                    .inspect_err(|e| tracing::warn!(path = %media.path.display(), error = %e, "can't open audio"))
+                    .ok()
+                    .map(|reader| {
+                        let reader = Reader { reader, failed: false };
+                        ClipAudio::new(reader, origin, item.reverse, item.speed, item.keep_pitch)
+                    });
+                source.broken = source.clip.is_none();
+            }
+            let Some(clip) = source.clip.as_mut() else {
                 continue;
             };
-            // Source time of the first sample we need.
-            let want = item.source_in + (sample_to_time(a) - item.start);
-            let tolerance = sample_to_time(1);
-            if (reader.position() - want).ticks().abs() > tolerance.ticks() {
-                reader.seek(want);
-            }
             let n = ((b - a) as usize) * CHANNELS;
             self.scratch.resize(n, 0.0);
-            let got = match reader.read(&mut self.scratch[..n]) {
-                Ok(got) => got,
-                Err(e) => {
-                    tracing::warn!(error = %e, "audio decode failed");
-                    source.reader = None;
-                    continue;
-                }
-            };
+            clip.read(a - item_start, &mut self.scratch[..n]);
+            let got = n;
             let offset = ((a - start) as usize) * CHANNELS;
             let look = &item.look;
             let faded = look.fade_in > rw_model::Time::ZERO || look.fade_out > rw_model::Time::ZERO;
