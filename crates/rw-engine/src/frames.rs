@@ -50,11 +50,12 @@ fn inside(item: &Item, t: Time) -> Time {
 /// What each visible track draws at `t`, bottom-most first.
 pub fn draws_at(project: &Project, t: Time) -> Vec<Draw<'_>> {
     let mut out = Vec::new();
-    for track in project
-        .tracks
-        .iter()
-        .filter(|tr| matches!(tr.kind, TrackKind::Video | TrackKind::Overlay) && !tr.hidden)
-    {
+    for track in project.tracks.iter().filter(|tr| {
+        matches!(
+            tr.kind,
+            TrackKind::Video | TrackKind::Overlay | TrackKind::Text
+        ) && !tr.hidden
+    }) {
         let crossing = track.transitions.iter().find_map(|tr| {
             let a = track.items.iter().find(|i| i.id == tr.a)?;
             let b = track.items.iter().find(|i| i.id == tr.b)?;
@@ -257,11 +258,12 @@ impl FrameSource {
             }
         }
         let mut warm = Vec::new();
-        for track in project
-            .tracks
-            .iter()
-            .filter(|tr| matches!(tr.kind, TrackKind::Video | TrackKind::Overlay) && !tr.hidden)
-        {
+        for track in project.tracks.iter().filter(|tr| {
+            matches!(
+                tr.kind,
+                TrackKind::Video | TrackKind::Overlay | TrackKind::Text
+            ) && !tr.hidden
+        }) {
             for item in track
                 .items
                 .iter()
@@ -344,6 +346,15 @@ impl FrameSource {
         // One layer per picture with its look; fades fold into opacity.
         let mut layer_for = |slot: usize| -> Option<Layer> {
             let (item, at) = pictures[slot];
+            let local = at - item.start;
+            if item.text().is_some() {
+                let mut layer = crate::text::layer(item, local, out)?;
+                layer.look.opacity *= item.look.fade_at(local, item.duration);
+                layer.clip_time = local.as_secs_f64() as f32;
+                layer.clip_progress =
+                    (local.as_secs_f64() / item.duration.as_secs_f64().max(1e-9)) as f32;
+                return Some(layer);
+            }
             let mut layer = match item.generated_fill() {
                 Some(Generated::Solid { color }) => Layer::new(Source::Solid(color)),
                 Some(Generated::Gradient { from, to, angle }) => {
@@ -351,7 +362,6 @@ impl FrameSource {
                 }
                 None => decoded.remove(&slot)?,
             };
-            let local = at - item.start;
             layer.look = item.look.clone();
             layer.look.opacity *= item.look.fade_at(local, item.duration);
             layer.clip_time = local.as_secs_f64() as f32;

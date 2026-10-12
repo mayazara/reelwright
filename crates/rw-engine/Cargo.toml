@@ -13,6 +13,7 @@ rw-media.workspace = true
 rw-cache.workspace = true
 rw-render.workspace = true
 rw-audio.workspace = true
+rw-text.workspace = true
 crossbeam-channel.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
@@ -21,6 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+rw-text.workspace = true
 rw-edit.workspace = true
 rw-media = { workspace = true, features = ["fixtures"] }
 tempfile.workspace = true

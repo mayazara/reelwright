@@ -6,6 +6,7 @@
 
 pub mod fonts;
 pub mod motion;
+pub mod presets;
 mod raster;
 
 pub use motion::{Pose, pose_at};

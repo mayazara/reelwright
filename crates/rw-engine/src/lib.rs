@@ -9,5 +9,6 @@ pub mod frames;
 pub mod import;
 pub mod jobs;
 pub mod playback;
+pub mod text;
 
 pub use jobs::{MediaEvent, MediaJobs, Waker};

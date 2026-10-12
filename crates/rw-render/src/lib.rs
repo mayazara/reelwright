@@ -6,6 +6,7 @@
 //! only the output size differs.
 
 mod compositor;
+pub mod golden;
 mod gpu;
 
 pub use compositor::{Compositor, Layer, LayerTransition, OUTPUT_FORMAT, Source, content_size};

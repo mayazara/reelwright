@@ -598,6 +598,11 @@ enum Gen {
     RemoveTransition {
         n: usize,
     },
+    Text {
+        item: usize,
+        size: u8,
+        enter_ms: i64,
+    },
     Undo,
     Redo,
 }
@@ -606,7 +611,7 @@ fn any_edit() -> impl Strategy<Value = Gen> {
     let i = 0usize..12;
     let t = -2i64..40;
     prop_oneof![
-        3 => (0usize..4, 0usize..6, any::<bool>(), t.clone()).prop_map(|(media, track, new_track, at)| Gen::Insert { media, track, new_track, at }),
+        3 => (0usize..5, 0usize..6, any::<bool>(), t.clone()).prop_map(|(media, track, new_track, at)| Gen::Insert { media, track, new_track, at }),
         2 => (i.clone(), -8i64..8, proptest::option::of(0usize..6)).prop_map(|(item, delta, track)| Gen::Move { item, delta, track }),
         2 => (i.clone(), any::<bool>(), t.clone(), any::<bool>()).prop_map(|(item, start, to, ripple)| Gen::Trim { item, start, to, ripple }),
         1 => (i.clone(), 0i64..12).prop_map(|(item, to)| Gen::Slip { item, to }),
@@ -626,6 +631,7 @@ fn any_edit() -> impl Strategy<Value = Gen> {
         1 => (i.clone(), t.clone(), 0i64..4).prop_map(|(item, at, secs)| Gen::Freeze { item, at, secs }),
         2 => (i.clone(), 0usize..20, 0i64..5000).prop_map(|(item, kind, millis)| Gen::Transition { item, kind, millis }),
         1 => (0usize..4).prop_map(|n| Gen::RemoveTransition { n }),
+        1 => (i.clone(), any::<u8>(), 0i64..20_000).prop_map(|(item, size, enter_ms)| Gen::Text { item, size, enter_ms }),
         2 => Just(Gen::Undo),
         1 => Just(Gen::Redo),
     ]
@@ -642,12 +648,16 @@ fn op_for(g: &Gen, p: &Project) -> Option<TimelineOp> {
             new_track,
             at,
         } => {
-            // Index 3 is a generated background clip.
-            let (kind, item) = match p.media.get(*media) {
-                Some(m) => (track_kind_for(m.kind()), Item::new(m, Time::ZERO)),
-                None => (
+            // Index 3 is a generated background clip, 4 a text item.
+            let (kind, item) = match (p.media.get(*media), *media) {
+                (Some(m), _) => (track_kind_for(m.kind()), Item::new(m, Time::ZERO)),
+                (None, 3) => (
                     TrackKind::Video,
                     Item::generated(Generated::Solid { color: Rgba::BLACK }, Time::ZERO),
+                ),
+                (None, _) => (
+                    TrackKind::Text,
+                    Item::text_item(TextSpec::new("Title"), Time::ZERO),
                 ),
             };
             let placement = if *new_track {
@@ -775,6 +785,19 @@ fn op_for(g: &Gen, p: &Project) -> Option<TimelineOp> {
                 id: *all.get(n % all.len().max(1))?,
             }
         }
+        Gen::Text {
+            item: n,
+            size,
+            enter_ms,
+        } => {
+            let mut spec = TextSpec::new("Edited");
+            spec.style.size = f32::from(*size) / 200.0;
+            spec.enter.duration = Time::from_millis(*enter_ms);
+            TimelineOp::SetText {
+                item: item(*n)?,
+                text: spec,
+            }
+        }
         Gen::Undo | Gen::Redo => return None,
     })
 }
@@ -821,6 +844,11 @@ proptest! {
                     }
                 }
             }
+            for track in &p.tracks {
+                for item in &track.items {
+                    prop_assert_eq!(item.text().is_some(), track.kind == TrackKind::Text, "text only on text tracks");
+                }
+            }
             if let Err(e) = check_invariants(&p.tracks) {
                 return Err(TestCaseError::fail(format!("{e} after {g:?}\n{:#?}", p.tracks)));
             }
@@ -828,6 +856,10 @@ proptest! {
                 prop_assert!(item.look.fade_in + item.look.fade_out <= item.duration, "fades overflow: {item:?}");
                 prop_assert!((0.0..=1.0).contains(&item.look.opacity));
                 prop_assert!((MIN_SPEED..=MAX_SPEED).contains(&item.speed));
+                if let Some(t) = item.text() {
+                    prop_assert!(t.enter.duration + t.exit.duration <= item.duration, "text motion overflows: {item:?}");
+                    prop_assert!((MIN_TEXT_SIZE..=MAX_TEXT_SIZE).contains(&t.style.size));
+                }
                 let Some(m) = item.media().and_then(|id| p.media(id)) else { continue };
                 if let Some(max) = max_duration(m, Time::ZERO) {
                     if let Some(at) = item.held_frame() {

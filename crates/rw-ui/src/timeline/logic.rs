@@ -165,7 +165,11 @@ pub fn drop_row(project: &Project, rows: &[Row], y: f32, kind: TrackKind) -> Dro
             (_, None) => 0,
         };
         DropRow::New {
-            kind: TrackKind::Video,
+            kind: if kind == TrackKind::Text {
+                TrackKind::Text
+            } else {
+                TrackKind::Video
+            },
             index,
         }
     } else {
@@ -179,6 +183,7 @@ pub fn drop_row(project: &Project, rows: &[Row], y: f32, kind: TrackKind) -> Dro
 pub fn compatible(track: TrackKind, item: TrackKind) -> bool {
     match item {
         TrackKind::Audio => track == TrackKind::Audio,
+        TrackKind::Text => track == TrackKind::Text,
         _ => matches!(track, TrackKind::Video | TrackKind::Overlay),
     }
 }

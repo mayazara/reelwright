@@ -18,8 +18,9 @@
 use crate::{Command, EditError};
 use rw_model::{
     BlendMode, ColorAdjust, Crop, Effect, Filter, Generated, GroupId, Item, ItemId, Look, MAX_GAIN,
-    MAX_SPEED, MAX_TRANSITION, MIN_SPEED, MIN_TRANSITION, MediaKind, MediaRef, Project, Time,
-    Track, TrackId, TrackKind, Transform, Transition, TransitionId, TransitionKind, max_duration,
+    MAX_SPEED, MAX_TRANSITION, MIN_SPEED, MIN_TRANSITION, MediaKind, MediaRef, Project, TextSpec,
+    Time, Track, TrackId, TrackKind, Transform, Transition, TransitionId, TransitionKind,
+    max_duration,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -165,6 +166,11 @@ pub enum TimelineOp {
     RemoveTransition {
         id: TransitionId,
     },
+    /// Replaces a text item's text and style.
+    SetText {
+        item: ItemId,
+        text: TextSpec,
+    },
 }
 
 /// A partial change to [`Look`]; applied field by field.
@@ -265,6 +271,7 @@ impl TimelineOp {
             TimelineOp::AddTransition { .. } => "Add transition".into(),
             TimelineOp::SetTransition { .. } => "Change transition".into(),
             TimelineOp::RemoveTransition { .. } => "Remove transition".into(),
+            TimelineOp::SetText { .. } => "Edit text".into(),
             TimelineOp::SetTrack { change, .. } => match change {
                 TrackChange::Locked(true) => "Lock track",
                 TrackChange::Locked(false) => "Unlock track",
@@ -423,6 +430,9 @@ fn require_some(ids: Vec<ItemId>) -> Result<Vec<ItemId>, EditError> {
 /// Whether an item may sit on a track of `kind`.
 fn fits(item: &Item, media: Option<&MediaRef>, kind: TrackKind) -> bool {
     let visual = matches!(kind, TrackKind::Video | TrackKind::Overlay);
+    if item.text().is_some() {
+        return kind == TrackKind::Text;
+    }
     match (item.generated_fill(), media.map(MediaRef::kind)) {
         (Some(_), _) => visual,
         (None, Some(MediaKind::Audio)) => kind == TrackKind::Audio,
@@ -864,6 +874,7 @@ impl Ctx<'_> {
                     let (t, i) = locate(tracks, id).ok_or(EditError::NotFound("item"))?;
                     let it = &tracks[t].items[i];
                     let free_length = it.generated_fill().is_some()
+                        || it.text().is_some()
                         || it.held_frame().is_some()
                         || self.media(it).is_some_and(|m| m.kind() == MediaKind::Image);
                     if free_length {
@@ -873,7 +884,7 @@ impl Ctx<'_> {
                 }
                 if !any {
                     return Err(EditError::Invalid(
-                        "only still images, held frames and backgrounds have a set duration".into(),
+                        "only stills, held frames, text and backgrounds have a set duration".into(),
                     ));
                 }
             }
@@ -1074,6 +1085,20 @@ impl Ctx<'_> {
                 track.transitions.retain(|tr| tr.id != *id);
             }
 
+            TimelineOp::SetText { item, text } => {
+                let (t, i) = locate(tracks, *item).ok_or(EditError::NotFound("item"))?;
+                if tracks[t].locked {
+                    return Err(EditError::Invalid("the track is locked".into()));
+                }
+                let it = &mut tracks[t].items[i];
+                if it.text().is_none() {
+                    return Err(EditError::Invalid("select a text item".into()));
+                }
+                it.kind = rw_model::ItemKind::Text {
+                    text: Box::new(text.clone().sanitized(it.duration)),
+                };
+            }
+
             TimelineOp::SetTrack { track, change } => {
                 let t = track_index(tracks, *track)?;
                 let tr = &mut tracks[t];
@@ -1117,11 +1142,18 @@ fn normalize_with(tracks: &mut Vec<Track>, new_track_id: &mut dyn FnMut() -> Tra
         }
         seen_main |= t.main;
     }
-    // Fades must fit the (possibly trimmed) clip.
+    // Fades and text animations must fit the (possibly trimmed) clip.
     for track in tracks.iter_mut() {
         for item in &mut track.items {
             if !item.look.is_default() {
                 item.look = item.look.clone().sanitized(item.duration);
+            }
+            let duration = item.duration;
+            if let rw_model::ItemKind::Text { text } = &mut item.kind {
+                let fixed = (**text).clone().sanitized(duration);
+                if **text != fixed {
+                    **text = fixed;
+                }
             }
         }
     }
