@@ -6,6 +6,7 @@
 pub mod device;
 mod mixer;
 pub mod output;
+pub mod spectrum;
 pub mod stretch;
 
 pub use mixer::{Mixer, audible_items};

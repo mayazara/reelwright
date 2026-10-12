@@ -146,6 +146,8 @@ pub struct FrameSource {
     readers: HashMap<ItemId, Entry>,
     /// Readers being opened and positioned in the background.
     warming: HashMap<ItemId, std::sync::mpsc::Receiver<Entry>>,
+    /// Mixes the sound around a frame for audio visualisers.
+    mixer: rw_audio::Mixer,
     calls: u64,
 }
 
@@ -187,6 +189,7 @@ impl FrameSource {
             prefer_proxies,
             readers: HashMap::new(),
             warming: HashMap::new(),
+            mixer: rw_audio::Mixer::new(),
             calls: 0,
         }
     }
@@ -343,12 +346,34 @@ impl FrameSource {
                 ))
             })
             .collect();
+        // The sound around this moment, if a visualiser needs it.
+        let sound = pictures
+            .iter()
+            .any(|(i, _)| matches!(i.kind, rw_model::ItemKind::Visualiser { .. }))
+            .then(|| {
+                let n = rw_audio::spectrum::WINDOW;
+                let mut buf = vec![0.0f32; n * rw_audio::CHANNELS];
+                let start = rw_audio::time_to_sample(t) - n as i64 / 2;
+                self.mixer.mix(project, start, &mut buf);
+                buf
+            });
         // One layer per picture with its look; fades fold into opacity.
         let mut layer_for = |slot: usize| -> Option<Layer> {
             let (item, at) = pictures[slot];
             let local = at - item.start;
             if item.has_natural_size() {
-                let mut layer = crate::graphics::layer(item, local, out)?;
+                let levels = match (&item.kind, &sound) {
+                    (rw_model::ItemKind::Visualiser { visualiser }, Some(buf)) => {
+                        Some(rw_audio::spectrum::analyse(
+                            buf,
+                            usize::from(visualiser.bars),
+                            128,
+                            visualiser.sensitivity,
+                        ))
+                    }
+                    _ => None,
+                };
+                let mut layer = crate::graphics::layer(item, local, out, levels.as_ref())?;
                 layer.look.opacity *= item.look.fade_at(local, item.duration);
                 layer.clip_time = local.as_secs_f64() as f32;
                 layer.clip_progress =

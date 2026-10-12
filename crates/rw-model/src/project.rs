@@ -166,6 +166,10 @@ pub enum ItemKind {
     Shape {
         shape: crate::graphics::ShapeSpec,
     },
+    /// Bars or a wave that move with the project's sound.
+    Visualiser {
+        visualiser: crate::graphics::VisualiserSpec,
+    },
 }
 
 /// Slowest and fastest playback speed.
@@ -309,7 +313,8 @@ impl Item {
             ItemKind::Generated { .. }
             | ItemKind::Text { .. }
             | ItemKind::Sticker { .. }
-            | ItemKind::Shape { .. } => None,
+            | ItemKind::Shape { .. }
+            | ItemKind::Visualiser { .. } => None,
         }
     }
 
@@ -365,18 +370,35 @@ impl Item {
         }
     }
 
+    /// A visualiser item at `start`, 5 s long.
+    pub fn visualiser_item(visualiser: crate::graphics::VisualiserSpec, start: Time) -> Self {
+        Item {
+            kind: ItemKind::Visualiser { visualiser },
+            ..Item::generated(
+                crate::visual::Generated::Solid { color: Rgba::BLACK },
+                start,
+            )
+        }
+    }
+
     /// Whether the item is drawn at a natural size scaled by its transform
     /// (text and graphics) rather than fitted into its box (pictures).
     pub fn has_natural_size(&self) -> bool {
         matches!(
             self.kind,
-            ItemKind::Text { .. } | ItemKind::Sticker { .. } | ItemKind::Shape { .. }
+            ItemKind::Text { .. }
+                | ItemKind::Sticker { .. }
+                | ItemKind::Shape { .. }
+                | ItemKind::Visualiser { .. }
         )
     }
 
-    /// Whether the item is a graphic (sticker or shape).
+    /// Whether the item is a graphic (sticker, shape or visualiser).
     pub fn is_graphic(&self) -> bool {
-        matches!(self.kind, ItemKind::Sticker { .. } | ItemKind::Shape { .. })
+        matches!(
+            self.kind,
+            ItemKind::Sticker { .. } | ItemKind::Shape { .. } | ItemKind::Visualiser { .. }
+        )
     }
 
     /// The text this item shows, for text items.

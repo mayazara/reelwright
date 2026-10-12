@@ -145,6 +145,80 @@ impl ShapeSpec {
     }
 }
 
+/// Natural height of an audio visualiser, as a share of the canvas height.
+pub const VISUALISER_HEIGHT: f32 = 0.25;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VisualiserStyle {
+    /// Frequency bars.
+    Bars,
+    /// The sound wave.
+    Wave,
+    /// Frequency bars around a circle.
+    Circle,
+}
+
+impl VisualiserStyle {
+    pub const ALL: [VisualiserStyle; 3] = [
+        VisualiserStyle::Bars,
+        VisualiserStyle::Wave,
+        VisualiserStyle::Circle,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            VisualiserStyle::Bars => "Bars",
+            VisualiserStyle::Wave => "Wave",
+            VisualiserStyle::Circle => "Circle",
+        }
+    }
+}
+
+/// Moves with the project's sound.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VisualiserSpec {
+    pub style: VisualiserStyle,
+    pub color: Rgba,
+    /// Bars (bars and circle styles), 8 to 128.
+    pub bars: u16,
+    /// How strongly it reacts, 0.2 to 4.
+    pub sensitivity: f32,
+}
+
+impl VisualiserSpec {
+    pub fn new(style: VisualiserStyle) -> Self {
+        VisualiserSpec {
+            style,
+            color: Rgba([242, 165, 65, 255]),
+            bars: if style == VisualiserStyle::Circle {
+                64
+            } else {
+                32
+            },
+            sensitivity: 1.0,
+        }
+    }
+
+    /// Width divided by height.
+    pub fn aspect(&self) -> f32 {
+        match self.style {
+            VisualiserStyle::Circle => 1.0,
+            _ => 3.0,
+        }
+    }
+
+    pub fn sanitized(mut self) -> Self {
+        self.bars = self.bars.clamp(8, 128);
+        self.sensitivity = if self.sensitivity.is_finite() {
+            self.sensitivity.clamp(0.2, 4.0)
+        } else {
+            1.0
+        };
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

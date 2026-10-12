@@ -4,8 +4,9 @@
 //! size (`[1, 1]` = natural). Text is laid out at its font size; stickers
 //! and shapes are drawn at the size they're shown so they stay sharp.
 
+use rw_audio::spectrum::Levels;
 use rw_media::RgbaImage;
-use rw_model::{Fit, Item, ItemKind, SHAPE_HEIGHT, STICKER_HEIGHT, Time};
+use rw_model::{Fit, Item, ItemKind, SHAPE_HEIGHT, STICKER_HEIGHT, Time, VISUALISER_HEIGHT};
 use rw_render::Layer;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -45,8 +46,14 @@ pub struct Placed {
     pub image: Arc<RgbaImage>,
 }
 
-/// Lays out a text, sticker or shape item for a canvas `canvas` in size.
-pub fn place(item: &Item, local: Time, canvas: (u32, u32)) -> Option<Placed> {
+/// Lays out a text, sticker, shape or visualiser item for a canvas
+/// `canvas` in size. A visualiser draws `levels` (flat without them).
+pub fn place(
+    item: &Item,
+    local: Time,
+    canvas: (u32, u32),
+    levels: Option<&Levels>,
+) -> Option<Placed> {
     let t = item.look.transform;
     let (cw, ch) = (canvas.0.max(1) as f32, canvas.1.max(1) as f32);
     match &item.kind {
@@ -89,14 +96,35 @@ pub fn place(item: &Item, local: Time, canvas: (u32, u32)) -> Option<Placed> {
                 image: converted(key, r.width, r.height, &r.pixels),
             })
         }
+        ItemKind::Visualiser { visualiser } => {
+            let px = (VISUALISER_HEIGHT * ch * t.size[1].abs()).round().max(2.0) as u32;
+            let flat = Levels::default();
+            let l = levels.unwrap_or(&flat);
+            let bands: Vec<f32> = if l.bands.is_empty() {
+                vec![0.0; usize::from(visualiser.bars)]
+            } else {
+                l.bands.clone()
+            };
+            let (key, r) = rw_assets::raster::visualiser(visualiser, &bands, &l.wave, px)?;
+            Some(Placed {
+                center: t.center,
+                size: [
+                    r.width as f32 / cw * (t.size[0] / t.size[1].max(1e-3)),
+                    r.height as f32 / ch,
+                ],
+                opacity: 1.0,
+                key,
+                image: Arc::new(RgbaImage::new(r.width, r.height, r.pixels.clone())),
+            })
+        }
         _ => None,
     }
 }
 
 /// The compositor layer for a natural-size item at `local`, drawn for an
 /// output `out` pixels in size.
-pub fn layer(item: &Item, local: Time, out: (u32, u32)) -> Option<Layer> {
-    let p = place(item, local, out)?;
+pub fn layer(item: &Item, local: Time, out: (u32, u32), levels: Option<&Levels>) -> Option<Layer> {
+    let p = place(item, local, out, levels)?;
     let mut layer = Layer::image(p.image, p.key, 0);
     layer.look = item.look.clone();
     layer.look.transform.center = p.center;

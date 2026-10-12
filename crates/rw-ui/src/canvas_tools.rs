@@ -104,7 +104,7 @@ fn geometry(project: &Project, item: &Item, at: Time) -> Option<Geometry> {
     let canvas = (project.canvas.width, project.canvas.height);
     if item.has_natural_size() {
         let local = (at - item.start).clamp(Time::ZERO, item.duration);
-        let p = rw_engine::graphics::place(item, local, canvas)?;
+        let p = rw_engine::graphics::place(item, local, canvas, None)?;
         let half = vec2(p.size[0] * canvas.0 as f32, p.size[1] * canvas.1 as f32) / 2.0;
         return Some(Geometry {
             center: vec2(p.center[0] * canvas.0 as f32, p.center[1] * canvas.1 as f32),

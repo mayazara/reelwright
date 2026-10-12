@@ -325,3 +325,93 @@ mod tests {
         assert!(sticker(&missing, 64).is_none());
     }
 }
+
+/// Draws an audio visualiser `height` pixels tall from `bands` (0–1, low to
+/// high) and `wave` (−1–1). Not cached: it changes every frame.
+pub fn visualiser(
+    spec: &rw_model::VisualiserSpec,
+    bands: &[f32],
+    wave: &[f32],
+    height: u32,
+) -> Option<(u64, Arc<Raster>)> {
+    use rw_model::VisualiserStyle;
+    let height = height.clamp(2, 4096);
+    let h = height as f32;
+    let w = (h * spec.aspect()).round().max(2.0);
+    let mut pixmap = Pixmap::new(w as u32, height)?;
+    let p = paint(spec.color);
+    match spec.style {
+        VisualiserStyle::Bars => {
+            let n = bands.len().max(1) as f32;
+            let slot = w / n;
+            let bar = (slot * 0.7).max(1.0);
+            for (i, v) in bands.iter().enumerate() {
+                // A sliver even when silent, so the bars read as bars.
+                let bh = (v.clamp(0.0, 1.0) * (h - 2.0)).max(h * 0.03);
+                let x = i as f32 * slot + (slot - bar) / 2.0;
+                let mut pb = PathBuilder::new();
+                rounded_rect(&mut pb, x, h - bh, x + bar, h, bar * 0.3);
+                if let Some(path) = pb.finish() {
+                    pixmap.fill_path(&path, &p, FillRule::Winding, Transform::identity(), None);
+                }
+            }
+        }
+        VisualiserStyle::Wave => {
+            let mut pb = PathBuilder::new();
+            let n = wave.len().max(2);
+            for (i, v) in wave.iter().enumerate() {
+                let x = i as f32 / (n - 1) as f32 * (w - 4.0) + 2.0;
+                let y = h / 2.0 - v.clamp(-1.0, 1.0) * (h / 2.0 - 3.0);
+                if i == 0 {
+                    pb.move_to(x, y);
+                } else {
+                    pb.line_to(x, y);
+                }
+            }
+            if wave.is_empty() {
+                pb.move_to(2.0, h / 2.0);
+                pb.line_to(w - 2.0, h / 2.0);
+            }
+            if let Some(path) = pb.finish() {
+                let stroke = Stroke {
+                    width: (h * 0.04).max(1.5),
+                    line_cap: LineCap::Round,
+                    line_join: LineJoin::Round,
+                    ..Stroke::default()
+                };
+                pixmap.stroke_path(&path, &p, &stroke, Transform::identity(), None);
+            }
+        }
+        VisualiserStyle::Circle => {
+            let (cx, cy) = (w / 2.0, h / 2.0);
+            let inner = h * 0.22;
+            let reach = h / 2.0 - inner - 2.0;
+            let n = bands.len().max(1);
+            let width = (std::f32::consts::TAU * inner / n as f32 * 0.6).max(1.0);
+            for (i, v) in bands.iter().enumerate() {
+                let a = std::f32::consts::TAU * i as f32 / n as f32 - std::f32::consts::FRAC_PI_2;
+                let len = (v.clamp(0.0, 1.0) * reach).max(reach * 0.05);
+                let (s, c) = a.sin_cos();
+                let mut pb = PathBuilder::new();
+                pb.move_to(cx + c * inner, cy + s * inner);
+                pb.line_to(cx + c * (inner + len), cy + s * (inner + len));
+                if let Some(path) = pb.finish() {
+                    let stroke = Stroke {
+                        width,
+                        line_cap: LineCap::Round,
+                        ..Stroke::default()
+                    };
+                    pixmap.stroke_path(&path, &p, &stroke, Transform::identity(), None);
+                }
+            }
+        }
+    }
+    let key = hash((
+        "visualiser",
+        serde_json::to_string(spec).unwrap_or_default(),
+        height,
+        bands.iter().map(|v| (v * 255.0) as u8).collect::<Vec<_>>(),
+        wave.iter().map(|v| (v * 127.0) as i8).collect::<Vec<_>>(),
+    ));
+    Some((key, Arc::new(Raster::from_pixmap(pixmap))))
+}
