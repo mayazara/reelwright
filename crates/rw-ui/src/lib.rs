@@ -13,6 +13,7 @@ pub mod media_bin;
 pub mod preview;
 pub mod session;
 pub mod settings;
+pub mod text_library;
 pub mod textures;
 pub mod theme;
 pub mod timeline;
@@ -319,6 +320,11 @@ impl EditorUi {
             BinAction::AddGenerated(fill) => {
                 if let Some(s) = self.session.as_mut() {
                     s.apply(EditorAction::AppendGenerated(fill));
+                }
+            }
+            BinAction::AddText(text) => {
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::AddText(text));
                 }
             }
             BinAction::AddTransition(kind) => {

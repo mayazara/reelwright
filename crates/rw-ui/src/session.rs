@@ -63,6 +63,8 @@ pub struct Session {
     pub preview_patch: Option<(Vec<ItemId>, rw_edit::timeline::LookPatch)>,
     /// A background colour being dragged, likewise uncommitted.
     pub preview_fill: Option<(Vec<ItemId>, rw_model::Generated)>,
+    /// Text being typed or styled, likewise uncommitted.
+    pub preview_text: Option<(ItemId, rw_model::TextSpec)>,
     /// On-canvas handles and crop mode.
     pub canvas_tools: crate::canvas_tools::CanvasState,
     pub thumbs: HashMap<ContentHash, JobState>,
@@ -99,6 +101,7 @@ impl Session {
             preview_size: (project.canvas.width / 2, project.canvas.height / 2),
             preview_patch: None,
             preview_fill: None,
+            preview_text: None,
             canvas_tools: Default::default(),
             dir,
             project,
@@ -142,8 +145,15 @@ impl Session {
         self.revision += 1;
     }
 
+    pub fn set_preview_text(&mut self, item: ItemId, text: rw_model::TextSpec) {
+        self.preview_text = Some((item, text));
+        self.revision += 1;
+    }
+
     pub fn clear_preview_patch(&mut self) {
-        let had = self.preview_patch.take().is_some() | self.preview_fill.take().is_some();
+        let had = self.preview_patch.take().is_some()
+            | self.preview_fill.take().is_some()
+            | self.preview_text.take().is_some();
         if had {
             self.revision += 1;
         }
@@ -152,7 +162,10 @@ impl Session {
     /// The project as the preview should show it (with any uncommitted
     /// look change applied).
     pub fn preview_project(&self) -> std::borrow::Cow<'_, Project> {
-        if self.preview_patch.is_none() && self.preview_fill.is_none() {
+        if self.preview_patch.is_none()
+            && self.preview_fill.is_none()
+            && self.preview_text.is_none()
+        {
             return std::borrow::Cow::Borrowed(&self.project);
         }
         let mut p = self.project.clone();
@@ -169,6 +182,14 @@ impl Session {
             {
                 item.kind = rw_model::ItemKind::Generated { fill: *fill };
             }
+            if let Some((id, text)) = &self.preview_text
+                && *id == item.id
+                && item.text().is_some()
+            {
+                item.kind = rw_model::ItemKind::Text {
+                    text: Box::new(text.clone().sanitized(item.duration)),
+                };
+            }
         }
         std::borrow::Cow::Owned(p)
     }
@@ -177,6 +198,7 @@ impl Session {
     pub fn changed(&mut self) {
         self.preview_patch = None;
         self.preview_fill = None;
+        self.preview_text = None;
         self.revision += 1;
         self.player.set_project(Arc::new(self.project.clone()));
         let live: HashSet<ItemId> = self.project.items().map(|i| i.id).collect();

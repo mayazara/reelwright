@@ -167,11 +167,14 @@ fn placement(project: &Project, row: DropRow) -> Placement {
 
 fn track_names(rows: &[Row]) -> HashMap<usize, String> {
     let mut names = HashMap::new();
-    let (mut v, mut a) = (1, 1);
+    let (mut v, mut tx, mut a) = (1, 0, 1);
     // Number visual tracks bottom-up, audio top-down.
     for r in rows.iter().rev().filter(|r| r.kind != TrackKind::Audio) {
         let name = if r.main {
             "Main".to_owned()
+        } else if r.kind == TrackKind::Text {
+            tx += 1;
+            format!("Text {tx}")
         } else {
             v += 1;
             format!("Video {v}")
@@ -441,6 +444,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
             vec2(tracks.width(), logic::NEW_TRACK_ZONE - logic::ROW_GAP),
         );
         let carrying = egui::DragAndDrop::has_payload_of_type::<MediaId>(ui.ctx())
+            || egui::DragAndDrop::has_payload_of_type::<crate::text_library::TextDrag>(ui.ctx())
             || egui::DragAndDrop::has_payload_of_type::<rw_model::Generated>(ui.ctx())
             || matches!(state.drag, Some(Drag::Move { .. }));
         let over = carrying && pointer.is_some_and(|p| zone.contains(p));
@@ -1202,6 +1206,20 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 StrokeKind::Inside,
             );
         }
+        if let Some(drag) = released::<crate::text_library::TextDrag>(&body_resp) {
+            let row = logic::drop_row(
+                project,
+                &rows,
+                p.y - tracks.top() + state.scroll_y,
+                TrackKind::Text,
+            );
+            let at = drop_time(project, time_at(p.x), snap_on, snap_threshold, ctx.playhead);
+            out.push(EditorAction::InsertText {
+                text: drag.0.clone(),
+                row,
+                at,
+            });
+        }
         if let Some(fill) = released::<rw_model::Generated>(&body_resp) {
             let row = logic::drop_row(
                 project,
@@ -1430,7 +1448,13 @@ fn draw_item(
         return;
     }
     let media = item.media().and_then(|id| paint.project.media(id));
-    let base = if audio_row { t.highlight } else { t.accent };
+    let base = if audio_row {
+        t.highlight
+    } else if item.text().is_some() {
+        t.text_muted
+    } else {
+        t.accent
+    };
     let fill = base.gamma_multiply(if dimmed { 0.18 } else { 0.38 });
     let clip = p.with_clip_rect(r.intersect(row));
     clip.rect_filled(r, CornerRadius::same(4), fill);
@@ -1537,7 +1561,13 @@ fn draw_item(
         (Some(rw_model::Generated::Solid { .. }), _) => "Colour".to_owned(),
         (Some(rw_model::Generated::Gradient { .. }), _) => "Gradient".to_owned(),
         (None, Some(m)) => m.name.clone(),
-        (None, None) => "Missing media".to_owned(),
+        (None, None) => match item.text() {
+            Some(t) => {
+                let first = t.text.lines().next().unwrap_or_default();
+                format!("T  {first}")
+            }
+            None => "Missing media".to_owned(),
+        },
     };
     if item.held_frame().is_some() {
         label = format!("Still · {label}");

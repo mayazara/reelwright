@@ -13,6 +13,7 @@ rw-edit.workspace = true
 rw-media.workspace = true
 rw-cache.workspace = true
 rw-engine.workspace = true
+rw-text.workspace = true
 rw-render.workspace = true
 rw-fx.workspace = true
 rw-audio.workspace = true

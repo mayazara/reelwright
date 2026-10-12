@@ -32,6 +32,8 @@ struct Drag {
     start: Pos2,
     look: Look,
     geom: Geometry,
+    /// Text keeps its transform's size as a scale of its natural size.
+    text: bool,
 }
 
 #[derive(Debug, Default)]
@@ -98,9 +100,20 @@ fn display_size(project: &Project, item: &Item) -> Option<(f32, f32)> {
     })
 }
 
-fn geometry(project: &Project, item: &Item) -> Option<Geometry> {
-    let display = display_size(project, item)?;
+fn geometry(project: &Project, item: &Item, at: Time) -> Option<Geometry> {
     let canvas = (project.canvas.width, project.canvas.height);
+    if item.text().is_some() {
+        let local = (at - item.start).clamp(Time::ZERO, item.duration);
+        let p = rw_engine::text::place(item, local, canvas)?;
+        let half = vec2(p.size[0] * canvas.0 as f32, p.size[1] * canvas.1 as f32) / 2.0;
+        return Some(Geometry {
+            center: vec2(p.center[0] * canvas.0 as f32, p.center[1] * canvas.1 as f32),
+            half,
+            angle: item.look.transform.rotation.to_radians(),
+            full: half * 2.0,
+        });
+    }
+    let display = display_size(project, item)?;
     let look = &item.look;
     let t = look.transform;
     let generated = item.generated_fill().is_some();
@@ -158,7 +171,7 @@ fn apply_drag(d: &Drag, p: Vec2, canvas: Vec2, shift: bool, crop_mode: bool) -> 
             let k = (l1 / l0.max(1.0)).max(0.02);
             // Make the box match what's visible first, so stretching one
             // side feels direct whatever the fit was.
-            if t.fit == Fit::Contain {
+            if t.fit == Fit::Contain && !d.text {
                 t.size = [g.half.x * 2.0 / canvas.x, g.half.y * 2.0 / canvas.y];
                 t.fit = Fit::Stretch;
             }
@@ -366,7 +379,7 @@ pub fn show(
     }
 
     if let Some(item) = selected
-        && let Some(g) = geometry(&shown, item)
+        && let Some(g) = geometry(&shown, item, playhead)
     {
         // Outline and handles.
         let corners: Vec<Pos2> = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
@@ -450,6 +463,7 @@ pub fn show(
                     start: to_canvas(p).to_pos2(),
                     look: item.look.clone(),
                     geom: g,
+                    text: item.text().is_some(),
                 });
             }
         }
@@ -492,7 +506,7 @@ pub fn show(
         let c = to_canvas(p);
         let hit = items
             .iter()
-            .find(|i| geometry(&shown, i).is_some_and(|g| g.contains(c)));
+            .find(|i| geometry(&shown, i, playhead).is_some_and(|g| g.contains(c)));
         session.selection.clear();
         if let Some(i) = hit {
             session.selection.insert(i.id);
@@ -513,6 +527,7 @@ mod tests {
             start,
             look,
             geom,
+            text: false,
         }
     }
 

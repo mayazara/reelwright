@@ -4,7 +4,7 @@
 
 use crate::timeline::logic::DropRow;
 use rw_edit::timeline::TimelineOp;
-use rw_model::{Generated, MarkerId, MediaId, Time, TransitionKind};
+use rw_model::{Generated, MarkerId, MediaId, TextSpec, Time, TransitionKind};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EditorAction {
@@ -55,4 +55,30 @@ pub enum EditorAction {
     AddTransition(TransitionKind),
     /// Tell the user something (a hint after an action that did nothing).
     Notice(String),
+    /// Add a text item at the playhead on a text track.
+    AddText(TextItem),
+    /// Drop a text item at `at` on `row`.
+    InsertText {
+        text: TextItem,
+        row: DropRow,
+        at: Time,
+    },
+}
+
+/// A text item to add: its text and style, where it sits, how long it lasts.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextItem {
+    pub spec: TextSpec,
+    pub center: [f32; 2],
+    pub duration: Time,
+}
+
+impl From<rw_text::presets::Preset> for TextItem {
+    fn from(p: rw_text::presets::Preset) -> Self {
+        TextItem {
+            spec: p.spec,
+            center: p.center,
+            duration: p.duration,
+        }
+    }
 }

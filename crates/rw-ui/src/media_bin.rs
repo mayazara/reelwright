@@ -55,6 +55,7 @@ impl SortKey {
 pub enum LibraryTab {
     #[default]
     Media,
+    Text,
     Backgrounds,
     Transitions,
 }
@@ -78,6 +79,7 @@ pub enum BinAction {
     AddToNewTrack(MediaId),
     AddGenerated(rw_model::Generated),
     AddTransition(rw_model::TransitionKind),
+    AddText(crate::actions::TextItem),
 }
 
 /// Media to show, filtered and sorted. Search matches the name
@@ -122,12 +124,19 @@ pub fn show(
     let mut action = None;
     ui.horizontal(|ui| {
         ui.selectable_value(&mut state.tab, LibraryTab::Media, "Your media");
+        ui.selectable_value(&mut state.tab, LibraryTab::Text, "Text");
         ui.selectable_value(&mut state.tab, LibraryTab::Backgrounds, "Backgrounds");
         ui.selectable_value(&mut state.tab, LibraryTab::Transitions, "Transitions");
     });
     ui.separator();
     if state.tab == LibraryTab::Backgrounds {
         return crate::backgrounds::show(ui, tokens).map(BinAction::AddGenerated);
+    }
+    if state.tab == LibraryTab::Text {
+        return egui::ScrollArea::vertical()
+            .show(ui, |ui| crate::text_library::show(ui, tokens))
+            .inner
+            .map(BinAction::AddText);
     }
     if state.tab == LibraryTab::Transitions {
         return egui::ScrollArea::vertical()

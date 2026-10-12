@@ -391,6 +391,44 @@ impl Session {
                 }
             }
             EditorAction::Notice(text) => self.notify(text),
+            EditorAction::AddText(text) => {
+                let at = self.playhead();
+                let end = at + text.duration;
+                // A text track with room, else a new one on top.
+                let free = self.project.tracks.iter().rposition(|t| {
+                    t.kind == TrackKind::Text
+                        && !t.locked
+                        && !t.items.iter().any(|i| i.start < end && i.end() > at)
+                });
+                let row = match free {
+                    Some(i) => DropRow::Track(i),
+                    None => DropRow::New {
+                        kind: TrackKind::Text,
+                        index: self
+                            .project
+                            .tracks
+                            .iter()
+                            .rposition(|t| t.kind != TrackKind::Audio)
+                            .map_or(0, |i| i + 1),
+                    },
+                };
+                self.apply(EditorAction::InsertText { text, row, at });
+            }
+            EditorAction::InsertText { text, row, at } => {
+                let mut item = Item::text_item(text.spec, Time::ZERO);
+                item.duration = text.duration;
+                item.look.transform.center = text.center;
+                let id = item.id;
+                let placement = placement(&self.project, row);
+                if self.op(TimelineOp::Insert {
+                    placement,
+                    at,
+                    items: vec![item],
+                }) {
+                    self.selection = [id].into_iter().collect();
+                    self.timeline.selected_transition = None;
+                }
+            }
         }
     }
 }

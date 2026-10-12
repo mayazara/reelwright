@@ -11,8 +11,10 @@ use eframe::egui::{self, Response, RichText};
 use rw_edit::timeline::{LookPatch, TimelineOp};
 use rw_model::{
     BlendMode, ColorAdjust, ColorControl, Crop, Effect, EffectKind, Filter, Fit, Generated, Item,
-    ItemId, Layout, Look, MAX_GAIN, MAX_SPEED, MAX_TRANSITION, MIN_SPEED, MIN_TRANSITION,
-    MediaKind, Rgba, Time, Transform, TransitionId, TransitionKind,
+    ItemId, Layout, Look, MAX_GAIN, MAX_SPEED, MAX_TEXT_SIZE, MAX_TRANSITION, MIN_SPEED,
+    MIN_TEXT_SIZE, MIN_TRANSITION, MediaKind, Outline, Rgba, Shadow, TextAlign, TextAnimation,
+    TextBehaviour, TextBox, TextMotion, TextSpec, TextStyle, Time, Transform, TransitionId,
+    TransitionKind,
 };
 
 pub const EMPTY_LABEL: &str = "Select an item to edit its properties.";
@@ -39,6 +41,7 @@ pub fn db_to_gain(db: f32) -> f32 {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
+    Text,
     Transform,
     Colour,
     Filters,
@@ -52,6 +55,7 @@ pub enum Tab {
 impl Tab {
     pub fn label(self) -> &'static str {
         match self {
+            Tab::Text => "Text",
             Tab::Transform => "Transform",
             Tab::Colour => "Adjust colours",
             Tab::Filters => "Filters",
@@ -113,6 +117,12 @@ impl Edits<'_> {
         }
     }
 
+    fn commit_text(&mut self, item: ItemId, text: TextSpec) {
+        self.session.clear_preview_patch();
+        self.out
+            .push(EditorAction::Op(TimelineOp::SetText { item, text }));
+    }
+
     fn live_fill(&mut self, r: &Response, fill: Generated) {
         if r.changed() {
             self.session.set_preview_fill(self.ids.clone(), fill);
@@ -162,6 +172,7 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
         .iter()
         .filter(|i| {
             i.generated_fill().is_some()
+                || i.text().is_some()
                 || media_of(i).is_some_and(|m| m.kind() != MediaKind::Audio)
         })
         .collect();
@@ -189,6 +200,9 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
     if background {
         tabs.insert(0, Tab::Background);
     }
+    if first.text().is_some() {
+        tabs.insert(0, Tab::Text);
+    }
     tabs.push(Tab::Fade);
     if audible {
         tabs.push(Tab::Audio);
@@ -206,6 +220,7 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
             (Some(Generated::Solid { .. }), _) => "Colour background".to_owned(),
             (Some(Generated::Gradient { .. }), _) => "Gradient background".to_owned(),
             (None, Some(m)) => m.name.clone(),
+            (None, None) if item.text().is_some() => "Text".to_owned(),
             (None, None) => "Missing media".to_owned(),
         };
         ui.label(RichText::new(name).strong());
@@ -240,6 +255,7 @@ pub fn show(ui: &mut egui::Ui, session: &mut Session, tokens: Tokens) -> Vec<Edi
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
         .show(ui, |ui| match tab {
+            Tab::Text => text_tab(ui, &mut e, &first, tokens),
             Tab::Transform => transform_tab(ui, &mut e, &first.look, &shown, &first, tokens),
             Tab::Colour => colour_tab(ui, &mut e, &first.look.color),
             Tab::Filters => filters_tab(ui, &mut e, &first.look, tokens),
@@ -923,6 +939,370 @@ fn transition_panel(
         session.timeline.selected_transition = None;
     }
     out
+}
+
+impl Edits<'_> {
+    /// Live preview of a text change; commit when a drag ends, a click
+    /// changes something, or the text box loses focus.
+    fn live_text(&mut self, r: &Response, item: ItemId, text: TextSpec, typing: bool) {
+        if r.changed() {
+            self.session.set_preview_text(item, text.clone());
+        }
+        let commit = if typing {
+            r.lost_focus() && self.session.preview_text.is_some()
+        } else {
+            r.drag_stopped() || (r.changed() && !r.dragged())
+        };
+        if commit {
+            let text = self.session.preview_text.take().map_or(text, |(_, t)| t);
+            self.session.clear_preview_patch();
+            self.out
+                .push(EditorAction::Op(TimelineOp::SetText { item, text }));
+        }
+    }
+}
+
+fn c32(c: Rgba) -> egui::Color32 {
+    egui::Color32::from_rgba_unmultiplied(c.0[0], c.0[1], c.0[2], c.0[3])
+}
+
+fn from_c32(c: egui::Color32) -> Rgba {
+    let [r, g, b, a] = c.to_srgba_unmultiplied();
+    Rgba([r, g, b, a])
+}
+
+/// A compact colour button; returns the response and the new colour.
+fn colour_button(ui: &mut egui::Ui, c: Rgba) -> (Response, Rgba) {
+    let mut col = c32(c);
+    let r = egui::color_picker::color_edit_button_srgba(
+        ui,
+        &mut col,
+        egui::color_picker::Alpha::OnlyBlend,
+    );
+    (r, from_c32(col))
+}
+
+fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
+    let Some(spec) = item.text() else { return };
+    let id = item.id;
+    let s = &spec.style;
+    // Each control builds the whole new spec from the shown one.
+    let with = |f: &dyn Fn(&mut TextSpec)| {
+        let mut n = spec.clone();
+        f(&mut n);
+        n
+    };
+
+    if spec.behaviour != TextBehaviour::Countdown {
+        let mut text = spec.text.clone();
+        let r = ui.add(
+            egui::TextEdit::multiline(&mut text)
+                .desired_rows(3)
+                .desired_width(f32::INFINITY)
+                .hint_text("Type your text"),
+        );
+        e.live_text(&r, id, with(&|n| n.text = text.clone()), true);
+    }
+    ui.horizontal(|ui| {
+        ui.label("Behaviour");
+        for (b, label, tip) in [
+            (TextBehaviour::Static, "Still", "The text stays put"),
+            (
+                TextBehaviour::Roll,
+                "Rolling credits",
+                "Rolls up through the frame over the clip's length",
+            ),
+            (
+                TextBehaviour::Countdown,
+                "Countdown",
+                "Shows the whole seconds left until the clip ends",
+            ),
+        ] {
+            if ui
+                .selectable_label(spec.behaviour == b, label)
+                .on_hover_text(tip)
+                .clicked()
+            {
+                e.commit_text(id, with(&|n| n.behaviour = b));
+            }
+        }
+    });
+    ui.add_space(4.0);
+    egui::Grid::new("text-style")
+        .num_columns(2)
+        .spacing([10.0, 6.0])
+        .show(ui, |ui| {
+            ui.label("Font");
+            egui::ComboBox::from_id_salt("text-font")
+                .selected_text(&s.font)
+                .width(180.0)
+                .height(360.0)
+                .show_ui(ui, |ui| {
+                    let (bundled, system) = rw_text::font_families();
+                    for f in bundled {
+                        if ui.selectable_label(s.font == f, &f).clicked() {
+                            e.commit_text(id, with(&|n| n.style.font = f.clone()));
+                        }
+                    }
+                    if !system.is_empty() {
+                        ui.separator();
+                        ui.label(
+                            RichText::new("On this computer")
+                                .small()
+                                .color(tokens.text_muted),
+                        );
+                        for f in system {
+                            if ui.selectable_label(s.font == f, &f).clicked() {
+                                e.commit_text(id, with(&|n| n.style.font = f.clone()));
+                            }
+                        }
+                    }
+                });
+            ui.end_row();
+
+            ui.label("Size");
+            let mut v = s.size;
+            let r = ui
+                .add(
+                    egui::Slider::new(&mut v, MIN_TEXT_SIZE..=MAX_TEXT_SIZE)
+                        .logarithmic(true)
+                        .custom_formatter(|v, _| format!("{:.1} %", v * 100.0)),
+                )
+                .on_hover_text("Letter height as a share of the frame height");
+            e.live_text(&r, id, with(&|n| n.style.size = v), false);
+            ui.end_row();
+
+            ui.label("Weight");
+            let mut w = s.weight;
+            let r = ui.add(egui::Slider::new(&mut w, 100..=900).step_by(100.0));
+            e.live_text(&r, id, with(&|n| n.style.weight = w), false);
+            ui.end_row();
+
+            ui.label("Style");
+            if ui.selectable_label(s.italic, "Italic").clicked() {
+                e.commit_text(id, with(&|n| n.style.italic = !s.italic));
+            }
+            ui.end_row();
+
+            ui.label("Colour");
+            let (r, c) = colour_button(ui, s.color);
+            e.live_text(&r, id, with(&|n| n.style.color = c), false);
+            ui.end_row();
+
+            ui.label("Align");
+            ui.horizontal(|ui| {
+                for a in TextAlign::ALL {
+                    if ui.selectable_label(s.align == a, a.label()).clicked() {
+                        e.commit_text(id, with(&|n| n.style.align = a));
+                    }
+                }
+            });
+            ui.end_row();
+
+            ui.label("Letter spacing");
+            let mut v = s.letter_spacing;
+            let r = ui.add(egui::Slider::new(&mut v, -0.1..=0.5).max_decimals(2));
+            e.live_text(&r, id, with(&|n| n.style.letter_spacing = v), false);
+            ui.end_row();
+
+            ui.label("Line spacing");
+            let mut v = s.line_spacing;
+            let r = ui.add(egui::Slider::new(&mut v, 0.8..=2.5).max_decimals(2));
+            e.live_text(&r, id, with(&|n| n.style.line_spacing = v), false);
+            ui.end_row();
+        });
+
+    ui.add_space(6.0);
+    ui.label(RichText::new("Outline").strong());
+    ui.horizontal(|ui| {
+        let mut on = s.outline.is_some();
+        if ui.checkbox(&mut on, "Show").changed() {
+            e.commit_text(
+                id,
+                with(&|n| {
+                    n.style.outline = on.then_some(Outline {
+                        width: 0.06,
+                        color: Rgba([0, 0, 0, 255]),
+                    })
+                }),
+            );
+        }
+        if let Some(o) = s.outline {
+            let (r, c) = colour_button(ui, o.color);
+            e.live_text(
+                &r,
+                id,
+                with(&|n| n.style.outline = Some(Outline { color: c, ..o })),
+                false,
+            );
+            let mut w = o.width;
+            let r = ui
+                .add(egui::Slider::new(&mut w, 0.0..=0.3).max_decimals(2))
+                .on_hover_text("Thickness, as a share of the letter height");
+            e.live_text(
+                &r,
+                id,
+                with(&|n| n.style.outline = Some(Outline { width: w, ..o })),
+                false,
+            );
+        }
+    });
+
+    ui.label(RichText::new("Shadow").strong());
+    ui.horizontal(|ui| {
+        let mut on = s.shadow.is_some();
+        if ui.checkbox(&mut on, "Show").changed() {
+            e.commit_text(
+                id,
+                with(&|n| n.style.shadow = on.then(|| TextStyle::default().shadow).flatten()),
+            );
+        }
+        if let Some(sh) = s.shadow {
+            let (r, c) = colour_button(ui, sh.color);
+            e.live_text(
+                &r,
+                id,
+                with(&|n| n.style.shadow = Some(Shadow { color: c, ..sh })),
+                false,
+            );
+            let mut b = sh.blur;
+            let r = ui
+                .add(egui::Slider::new(&mut b, 0.0..=0.5).max_decimals(2))
+                .on_hover_text("Softness");
+            e.live_text(
+                &r,
+                id,
+                with(&|n| n.style.shadow = Some(Shadow { blur: b, ..sh })),
+                false,
+            );
+        }
+    });
+    if let Some(sh) = s.shadow {
+        ui.horizontal(|ui| {
+            ui.label("Distance");
+            let mut d = (sh.offset[0].powi(2) + sh.offset[1].powi(2)).sqrt();
+            let angle = sh.offset[1].atan2(sh.offset[0]);
+            let r = ui.add(egui::Slider::new(&mut d, 0.0..=0.5).max_decimals(2));
+            e.live_text(
+                &r,
+                id,
+                with(&|n| {
+                    n.style.shadow = Some(Shadow {
+                        offset: [d * angle.cos(), d * angle.sin()],
+                        ..sh
+                    })
+                }),
+                false,
+            );
+        });
+    }
+
+    ui.label(RichText::new("Background").strong());
+    ui.horizontal(|ui| {
+        let mut on = s.background.is_some();
+        if ui.checkbox(&mut on, "Box").changed() {
+            e.commit_text(
+                id,
+                with(&|n| {
+                    n.style.background = on.then_some(TextBox {
+                        color: Rgba([18, 20, 24, 200]),
+                        padding: 0.4,
+                        radius: 0.2,
+                    })
+                }),
+            );
+        }
+        if let Some(b) = s.background {
+            let (r, c) = colour_button(ui, b.color);
+            e.live_text(
+                &r,
+                id,
+                with(&|n| n.style.background = Some(TextBox { color: c, ..b })),
+                false,
+            );
+        }
+    });
+    if let Some(b) = s.background {
+        egui::Grid::new("text-box")
+            .num_columns(2)
+            .spacing([10.0, 6.0])
+            .show(ui, |ui| {
+                ui.label("Padding");
+                let mut v = b.padding;
+                let r = ui.add(egui::Slider::new(&mut v, 0.0..=2.0).max_decimals(2));
+                e.live_text(
+                    &r,
+                    id,
+                    with(&|n| n.style.background = Some(TextBox { padding: v, ..b })),
+                    false,
+                );
+                ui.end_row();
+                ui.label("Corners");
+                let mut v = b.radius;
+                let r = ui.add(egui::Slider::new(&mut v, 0.0..=2.0).max_decimals(2));
+                e.live_text(
+                    &r,
+                    id,
+                    with(&|n| n.style.background = Some(TextBox { radius: v, ..b })),
+                    false,
+                );
+                ui.end_row();
+            });
+    }
+
+    ui.add_space(6.0);
+    ui.label(RichText::new("Motion").strong());
+    let max = (item.duration.as_secs_f64() / 2.0).clamp(0.1, 10.0);
+    egui::Grid::new("text-motion")
+        .num_columns(3)
+        .spacing([8.0, 6.0])
+        .show(ui, |ui| {
+            for (label, current, enter) in [("In", spec.enter, true), ("Out", spec.exit, false)] {
+                ui.label(label);
+                egui::ComboBox::from_id_salt(("text-motion", label))
+                    .selected_text(current.motion.label())
+                    .width(130.0)
+                    .show_ui(ui, |ui| {
+                        for m in TextMotion::ALL {
+                            if ui
+                                .selectable_label(current.motion == m, m.label())
+                                .clicked()
+                            {
+                                let anim = TextAnimation {
+                                    motion: m,
+                                    duration: if current.duration > Time::ZERO {
+                                        current.duration
+                                    } else {
+                                        TextAnimation::DEFAULT_DURATION
+                                    },
+                                };
+                                e.commit_text(
+                                    id,
+                                    with(&|n| if enter { n.enter = anim } else { n.exit = anim }),
+                                );
+                            }
+                        }
+                    });
+                let mut v = current.duration.as_secs_f64();
+                let r = ui.add_enabled(
+                    current.motion != TextMotion::None,
+                    egui::Slider::new(&mut v, 0.0..=max)
+                        .suffix(" s")
+                        .max_decimals(1),
+                );
+                let anim = TextAnimation {
+                    duration: Time::from_secs_f64(v),
+                    ..current
+                };
+                e.live_text(
+                    &r,
+                    id,
+                    with(&|n| if enter { n.enter = anim } else { n.exit = anim }),
+                    false,
+                );
+                ui.end_row();
+            }
+        });
 }
 
 fn fade_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, items: &[Item]) {
