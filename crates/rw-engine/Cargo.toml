@@ -14,6 +14,7 @@ rw-cache.workspace = true
 rw-render.workspace = true
 rw-audio.workspace = true
 rw-text.workspace = true
+rw-assets.workspace = true
 gif.workspace = true
 crossbeam-channel.workspace = true
 tracing.workspace = true

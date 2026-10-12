@@ -158,6 +158,14 @@ pub enum ItemKind {
     Text {
         text: Box<crate::text::TextSpec>,
     },
+    /// A sticker or emoji from a pack.
+    Sticker {
+        sticker: crate::graphics::StickerRef,
+    },
+    /// A vector shape or arrow.
+    Shape {
+        shape: crate::graphics::ShapeSpec,
+    },
 }
 
 /// Slowest and fastest playback speed.
@@ -298,7 +306,10 @@ impl Item {
     pub fn media(&self) -> Option<MediaId> {
         match self.kind {
             ItemKind::Media { media } | ItemKind::Frame { media, .. } => Some(media),
-            ItemKind::Generated { .. } | ItemKind::Text { .. } => None,
+            ItemKind::Generated { .. }
+            | ItemKind::Text { .. }
+            | ItemKind::Sticker { .. }
+            | ItemKind::Shape { .. } => None,
         }
     }
 
@@ -330,6 +341,42 @@ impl Item {
     /// Whether `t` falls inside the item (start inclusive, end exclusive).
     pub fn contains(&self, t: Time) -> bool {
         self.start <= t && t < self.end()
+    }
+
+    /// A sticker item at `start`, 5 s long.
+    pub fn sticker_item(sticker: crate::graphics::StickerRef, start: Time) -> Self {
+        Item {
+            kind: ItemKind::Sticker { sticker },
+            ..Item::generated(
+                crate::visual::Generated::Solid { color: Rgba::BLACK },
+                start,
+            )
+        }
+    }
+
+    /// A shape item at `start`, 5 s long.
+    pub fn shape_item(shape: crate::graphics::ShapeSpec, start: Time) -> Self {
+        Item {
+            kind: ItemKind::Shape { shape },
+            ..Item::generated(
+                crate::visual::Generated::Solid { color: Rgba::BLACK },
+                start,
+            )
+        }
+    }
+
+    /// Whether the item is drawn at a natural size scaled by its transform
+    /// (text and graphics) rather than fitted into its box (pictures).
+    pub fn has_natural_size(&self) -> bool {
+        matches!(
+            self.kind,
+            ItemKind::Text { .. } | ItemKind::Sticker { .. } | ItemKind::Shape { .. }
+        )
+    }
+
+    /// Whether the item is a graphic (sticker or shape).
+    pub fn is_graphic(&self) -> bool {
+        matches!(self.kind, ItemKind::Sticker { .. } | ItemKind::Shape { .. })
     }
 
     /// The text this item shows, for text items.

@@ -102,9 +102,9 @@ fn display_size(project: &Project, item: &Item) -> Option<(f32, f32)> {
 
 fn geometry(project: &Project, item: &Item, at: Time) -> Option<Geometry> {
     let canvas = (project.canvas.width, project.canvas.height);
-    if item.text().is_some() {
+    if item.has_natural_size() {
         let local = (at - item.start).clamp(Time::ZERO, item.duration);
-        let p = rw_engine::text::place(item, local, canvas)?;
+        let p = rw_engine::graphics::place(item, local, canvas)?;
         let half = vec2(p.size[0] * canvas.0 as f32, p.size[1] * canvas.1 as f32) / 2.0;
         return Some(Geometry {
             center: vec2(p.center[0] * canvas.0 as f32, p.center[1] * canvas.1 as f32),
@@ -463,7 +463,7 @@ pub fn show(
                     start: to_canvas(p).to_pos2(),
                     look: item.look.clone(),
                     geom: g,
-                    text: item.text().is_some(),
+                    text: item.has_natural_size(),
                 });
             }
         }

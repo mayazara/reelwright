@@ -1,5 +1,6 @@
-//! Golden frames for every text preset, drawn through the engine and the
-//! compositor like preview and export. Presets use bundled fonts only, so
+//! Golden frames for every text preset and motion, every shape and some
+//! stickers, drawn through the engine and the compositor like preview and
+//! export. Presets use bundled fonts only, so
 //! frames match on every computer.
 //!
 //! Regenerate with
@@ -34,8 +35,13 @@ fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
-/// A gradient background with `text` over it, drawn at `at`.
+/// A gradient background with `text` over it on a text track, drawn at `at`.
 fn frame(gpu: &Gpu, text: Item, at: Time) -> rw_media::RgbaImage {
+    frame_on(gpu, text, at, TrackKind::Text)
+}
+
+/// A gradient background with `item` over it on a track of `kind`.
+fn frame_on(gpu: &Gpu, item: Item, at: Time, kind: TrackKind) -> rw_media::RgbaImage {
     let mut p = Project::new("text", Canvas::custom(SIZE.0, SIZE.1));
     let mut main = Track::new_main();
     let mut bg = Item::generated(
@@ -48,8 +54,8 @@ fn frame(gpu: &Gpu, text: Item, at: Time) -> rw_media::RgbaImage {
     );
     bg.duration = Time::from_secs(20);
     main.items.push(bg);
-    let mut track = Track::new(TrackKind::Text);
-    track.items.push(text);
+    let mut track = Track::new(kind);
+    track.items.push(item);
     p.tracks = vec![main, track];
     let tmp = tempfile::tempdir().unwrap();
     let mut source = FrameSource::new(ProjectCache::for_project(tmp.path()), false);
@@ -113,6 +119,42 @@ fn every_text_motion() {
         };
         let img = frame(&gpu, item, Time::from_millis(400));
         let name = format!("text-motion-{motion:?}").to_lowercase();
+        if let Err(e) = rw_render::golden::compare(&golden_dir(), &name, &img) {
+            failures.push(e);
+        }
+    }
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}
+
+/// Every shape, and a few stickers, placed off-centre and enlarged.
+#[test]
+fn shapes_and_stickers() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(gpu) = gpu() else { return };
+    let mut failures = Vec::new();
+    let mut cases: Vec<(String, Item)> = rw_model::ShapeKind::ALL
+        .iter()
+        .map(|k| {
+            (
+                format!("shape-{k:?}").to_lowercase(),
+                Item::shape_item(rw_model::ShapeSpec::new(*k), Time::ZERO),
+            )
+        })
+        .collect();
+    for id in ["1F600", "1F389", "2764", "1F44D"] {
+        let s = rw_model::StickerRef {
+            pack: "openmoji".into(),
+            id: id.into(),
+        };
+        cases.push((
+            format!("sticker-{id}").to_lowercase(),
+            Item::sticker_item(s, Time::ZERO),
+        ));
+    }
+    for (name, mut item) in cases {
+        item.look.transform.center = [0.4, 0.45];
+        item.look.transform.size = [1.3, 1.3];
+        let img = frame_on(&gpu, item, Time::from_secs(1), TrackKind::Video);
         if let Err(e) = rw_render::golden::compare(&golden_dir(), &name, &img) {
             failures.push(e);
         }

@@ -5,6 +5,7 @@
 
 pub mod effects;
 pub mod file;
+pub mod graphics;
 pub mod ids;
 pub mod library;
 pub mod media;
@@ -17,6 +18,7 @@ pub use effects::{
     DEFAULT_TRANSITION, Effect, EffectKind, MAX_TRANSITION, MIN_TRANSITION, Transition,
     TransitionId, TransitionKind,
 };
+pub use graphics::{SHAPE_HEIGHT, STICKER_HEIGHT, ShapeKind, ShapeSpec, ShapeStroke, StickerRef};
 pub use ids::{GroupId, ItemId, MarkerId, MediaId, ProjectId, TrackId};
 pub use media::{AudioInfo, ContentHash, MediaInfo, MediaKind, MediaRef, VideoInfo};
 pub use project::{

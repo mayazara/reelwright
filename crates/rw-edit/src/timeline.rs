@@ -171,6 +171,11 @@ pub enum TimelineOp {
         item: ItemId,
         text: TextSpec,
     },
+    /// Replaces a shape item's shape and colours.
+    SetShape {
+        item: ItemId,
+        shape: rw_model::ShapeSpec,
+    },
 }
 
 /// A partial change to [`Look`]; applied field by field.
@@ -272,6 +277,7 @@ impl TimelineOp {
             TimelineOp::SetTransition { .. } => "Change transition".into(),
             TimelineOp::RemoveTransition { .. } => "Remove transition".into(),
             TimelineOp::SetText { .. } => "Edit text".into(),
+            TimelineOp::SetShape { .. } => "Edit shape".into(),
             TimelineOp::SetTrack { change, .. } => match change {
                 TrackChange::Locked(true) => "Lock track",
                 TrackChange::Locked(false) => "Unlock track",
@@ -432,6 +438,9 @@ fn fits(item: &Item, media: Option<&MediaRef>, kind: TrackKind) -> bool {
     let visual = matches!(kind, TrackKind::Video | TrackKind::Overlay);
     if item.text().is_some() {
         return kind == TrackKind::Text;
+    }
+    if item.is_graphic() {
+        return visual;
     }
     match (item.generated_fill(), media.map(MediaRef::kind)) {
         (Some(_), _) => visual,
@@ -875,6 +884,7 @@ impl Ctx<'_> {
                     let it = &tracks[t].items[i];
                     let free_length = it.generated_fill().is_some()
                         || it.text().is_some()
+                        || it.is_graphic()
                         || it.held_frame().is_some()
                         || self.media(it).is_some_and(|m| m.kind() == MediaKind::Image);
                     if free_length {
@@ -1096,6 +1106,20 @@ impl Ctx<'_> {
                 }
                 it.kind = rw_model::ItemKind::Text {
                     text: Box::new(text.clone().sanitized(it.duration)),
+                };
+            }
+
+            TimelineOp::SetShape { item, shape } => {
+                let (t, i) = locate(tracks, *item).ok_or(EditError::NotFound("item"))?;
+                if tracks[t].locked {
+                    return Err(EditError::Invalid("the track is locked".into()));
+                }
+                let it = &mut tracks[t].items[i];
+                if !matches!(it.kind, rw_model::ItemKind::Shape { .. }) {
+                    return Err(EditError::Invalid("select a shape".into()));
+                }
+                it.kind = rw_model::ItemKind::Shape {
+                    shape: shape.clone().sanitized(),
                 };
             }
 

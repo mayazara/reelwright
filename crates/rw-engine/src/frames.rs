@@ -347,8 +347,8 @@ impl FrameSource {
         let mut layer_for = |slot: usize| -> Option<Layer> {
             let (item, at) = pictures[slot];
             let local = at - item.start;
-            if item.text().is_some() {
-                let mut layer = crate::text::layer(item, local, out)?;
+            if item.has_natural_size() {
+                let mut layer = crate::graphics::layer(item, local, out)?;
                 layer.look.opacity *= item.look.fade_at(local, item.duration);
                 layer.clip_time = local.as_secs_f64() as f32;
                 layer.clip_progress =
