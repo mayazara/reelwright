@@ -105,7 +105,7 @@ fn sticker_grid(
         let key = format!("{pack}/{}", s.id);
         let r = tile(
             ui,
-            &s.name,
+            &s.title(),
             tokens,
             || sticker_item(pack, &s.id),
             |ctx| {

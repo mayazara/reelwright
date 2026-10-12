@@ -25,6 +25,14 @@ pub struct StickerInfo {
 }
 
 impl StickerInfo {
+    /// The name with a capital first letter, for display.
+    pub fn title(&self) -> String {
+        let mut c = self.name.chars();
+        c.next()
+            .map(|f| f.to_uppercase().chain(c).collect())
+            .unwrap_or_default()
+    }
+
     /// Whether every word of `query` appears in the name, tags or group.
     pub fn matches(&self, query: &str) -> bool {
         let hay = format!(
@@ -46,6 +54,17 @@ pub fn bundled() -> &'static [StickerInfo] {
 }
 
 static USER_PACKS: OnceLock<PathBuf> = OnceLock::new();
+static BRAND_KIT: std::sync::RwLock<Option<PathBuf>> = std::sync::RwLock::new(None);
+
+/// Where the brand kit lives (set at start-up); its logos form the
+/// [`crate::brand::LOGO_PACK`] pack.
+pub fn set_brand_kit_dir(dir: PathBuf) {
+    *BRAND_KIT.write().unwrap_or_else(|e| e.into_inner()) = Some(dir);
+}
+
+pub fn brand_kit_dir() -> Option<PathBuf> {
+    BRAND_KIT.read().unwrap_or_else(|e| e.into_inner()).clone()
+}
 
 /// Where user packs live (call once at start-up).
 pub fn set_user_packs_dir(dir: PathBuf) {
@@ -119,7 +138,11 @@ pub fn data(pack: &str, id: &str) -> Option<(Cow<'static, [u8]>, Format)> {
             .ok()
             .map(|i| (Cow::Borrowed(OPENMOJI[i].1), Format::Svg));
     }
-    let dir = user_packs_dir()?.join(pack);
+    let dir = if pack == crate::brand::LOGO_PACK {
+        crate::brand::BrandKit::logos_dir(&brand_kit_dir()?)
+    } else {
+        user_packs_dir()?.join(pack)
+    };
     for (ext, format) in [
         ("svg", Format::Svg),
         ("png", Format::Png),

@@ -264,3 +264,16 @@ fn duplicate_and_delete_from_home() {
     h.run_ok();
     assert_eq!(h.state().editor().home.projects.len(), 1);
 }
+
+#[test]
+fn about_credits_bundled_content() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut h = harness(tmp.path());
+    h.get_by_label(home::ABOUT_LABEL).click();
+    h.run_ok();
+    let _ = h.get_by_label_contains("OpenMoji");
+    let _ = h.get_by_label_contains("Open Font Licence");
+    h.get_by_label("Close").click();
+    h.run_ok();
+    assert!(h.query_by_label_contains("OpenMoji").is_none(), "closed");
+}

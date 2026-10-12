@@ -560,3 +560,12 @@ Every file under `assets/` has exactly one row here (enforced by a test in `rw-a
 | `stickers/openmoji/1FADF.svg` | https://github.com/hfg-gmuend/openmoji/releases/tag/17.0.0 | CC-BY-SA-4.0 | OpenMoji, Daniel Utz |
 | `stickers/openmoji/index.json` | Derived from https://github.com/hfg-gmuend/openmoji/blob/17.0.0/data/openmoji.json | CC-BY-SA-4.0 | OpenMoji contributors |
 | `stickers/openmoji/LICENSE.txt` | https://github.com/hfg-gmuend/openmoji/blob/17.0.0/LICENSE.txt | CC-BY-SA-4.0 (licence text) | OpenMoji contributors |
+| `sounds/chime.wav` | original (synthesised by `crates/rw-assets/examples/make_sounds.rs`) | MIT OR Apache-2.0 | Reelwright contributors |
+| `sounds/click.wav` | original (synthesised by `crates/rw-assets/examples/make_sounds.rs`) | MIT OR Apache-2.0 | Reelwright contributors |
+| `sounds/ding.wav` | original (synthesised by `crates/rw-assets/examples/make_sounds.rs`) | MIT OR Apache-2.0 | Reelwright contributors |
+| `sounds/notify.wav` | original (synthesised by `crates/rw-assets/examples/make_sounds.rs`) | MIT OR Apache-2.0 | Reelwright contributors |
+| `sounds/pop.wav` | original (synthesised by `crates/rw-assets/examples/make_sounds.rs`) | MIT OR Apache-2.0 | Reelwright contributors |
+| `sounds/riser.wav` | original (synthesised by `crates/rw-assets/examples/make_sounds.rs`) | MIT OR Apache-2.0 | Reelwright contributors |
+| `sounds/swoosh-down.wav` | original (synthesised by `crates/rw-assets/examples/make_sounds.rs`) | MIT OR Apache-2.0 | Reelwright contributors |
+| `sounds/thump.wav` | original (synthesised by `crates/rw-assets/examples/make_sounds.rs`) | MIT OR Apache-2.0 | Reelwright contributors |
+| `sounds/whoosh.wav` | original (synthesised by `crates/rw-assets/examples/make_sounds.rs`) | MIT OR Apache-2.0 | Reelwright contributors |

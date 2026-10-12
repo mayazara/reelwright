@@ -2,6 +2,7 @@
 
 pub mod actions;
 pub mod backgrounds;
+pub mod brand_kit;
 pub mod canvas_tools;
 mod editing;
 pub mod export_dialog;
@@ -123,6 +124,7 @@ impl EditorUi {
             rw_text::set_user_fonts_dir(dir.join("fonts"));
             // Sticker packs people add: one folder of pictures per pack.
             rw_assets::stickers::set_user_packs_dir(dir.join("packs"));
+            rw_assets::stickers::set_brand_kit_dir(dir.join("brand-kit"));
         }
         let settings = Settings::load(&config.settings_file);
         let waker_ctx = ctx.clone();
@@ -130,7 +132,7 @@ impl EditorUi {
             Arc::new(Ffmpeg::new()),
             Arc::new(move || waker_ctx.request_repaint()),
         );
-        EditorUi {
+        let mut ui = EditorUi {
             theme: settings.theme.into(),
             theme_applied: None,
             library: Library::new(&config.projects_dir),
@@ -148,7 +150,9 @@ impl EditorUi {
             ui_gpu,
             export: None,
             export_dialog: None,
-        }
+        };
+        ui.reload_brand();
+        ui
     }
 
     pub fn screen(&self) -> Screen {
@@ -209,6 +213,7 @@ impl EditorUi {
                 self.save_settings();
                 self.session = Some(s);
                 self.bin = BinState::default();
+                self.reload_brand();
                 self.home.error = None;
             }
             Err(e) => {
@@ -334,6 +339,8 @@ impl EditorUi {
                     s.apply(EditorAction::AppendGenerated(fill));
                 }
             }
+            BinAction::Brand(a) => self.handle_brand_action(a),
+            BinAction::AddSound(name) => self.add_sound(name),
             BinAction::AddGraphic(item) => {
                 if let Some(s) = self.session.as_mut() {
                     s.apply(EditorAction::AddGraphic(item));
@@ -369,6 +376,146 @@ impl EditorUi {
         } else if let Some(s) = self.session.as_mut() {
             s.apply(action);
         }
+    }
+
+    /// Puts bundled sound `name` at the playhead (importing it first).
+    fn add_sound(&mut self, name: &str) {
+        let Some(dir) = self.config.settings_file.parent().map(|d| d.join("sounds")) else {
+            return;
+        };
+        let Some(s) = self.session.as_mut() else {
+            return;
+        };
+        let path = match rw_assets::sounds::materialise(name, &dir) {
+            Ok(p) => p,
+            Err(e) => {
+                s.notify_error(format!("Couldn't add the sound: {e}"));
+                return;
+            }
+        };
+        let existing = s
+            .project
+            .media
+            .iter()
+            .find(|m| m.path == path)
+            .map(|m| m.id);
+        let id = match existing {
+            Some(id) => id,
+            None => match rw_engine::import::probe_file(&Ffmpeg::new(), &path) {
+                Ok(m) => {
+                    let id = m.id;
+                    if s.execute(Box::new(rw_edit::commands::AddMedia::new(m)))
+                        .is_err()
+                    {
+                        return;
+                    }
+                    id
+                }
+                Err(e) => {
+                    s.notify_error(format!("Couldn't add the sound: {e}"));
+                    return;
+                }
+            },
+        };
+        s.apply(EditorAction::AppendMedia(id));
+    }
+
+    /// The brand kit's folder, beside the settings.
+    fn brand_dir(&self) -> PathBuf {
+        self.config
+            .settings_file
+            .parent()
+            .map_or_else(|| PathBuf::from("brand-kit"), |d| d.join("brand-kit"))
+    }
+
+    /// Loads the brand kit into the library (at start-up, when a project
+    /// opens, and after changes).
+    fn reload_brand(&mut self) {
+        let dir = self.brand_dir();
+        rw_assets::stickers::set_brand_kit_dir(dir.clone());
+        self.bin.brand = rw_assets::brand::BrandKit::load(&dir);
+        self.bin.brand_logos = rw_assets::brand::BrandKit::logos(&dir);
+    }
+
+    fn handle_brand_action(&mut self, action: brand_kit::BrandAction) {
+        use brand_kit::BrandAction as B;
+        let dir = self.brand_dir();
+        let kit = &mut self.bin.brand;
+        let mut changed = true;
+        let mut result: std::io::Result<()> = Ok(());
+        match action {
+            B::AddColour(c) => kit.add_colour(c),
+            B::RemoveColour(i) if i < kit.colours.len() => {
+                kit.colours.remove(i);
+            }
+            B::AddFont(f) => kit.add_font(&f),
+            B::RemoveFont(i) if i < kit.fonts.len() => {
+                kit.fonts.remove(i);
+            }
+            B::ImportLogo => {
+                changed = false;
+                if let Some(file) = rfd::FileDialog::new()
+                    .set_title("Add a logo")
+                    .add_filter("Pictures", rw_assets::brand::LOGO_TYPES)
+                    .pick_file()
+                {
+                    result = rw_assets::brand::BrandKit::add_logo(&dir, &file).map(|_| ());
+                }
+            }
+            B::RemoveLogo(id) => {
+                changed = false;
+                result = rw_assets::brand::BrandKit::remove_logo(&dir, &id);
+            }
+            B::ApplyColour(c) => {
+                changed = false;
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::ApplyColour(c));
+                }
+            }
+            B::ApplyFont(f) => {
+                changed = false;
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::ApplyFont(f));
+                }
+            }
+            B::AddBrandText => {
+                changed = false;
+                let mut preset: actions::TextItem = rw_text::presets::plain().into();
+                if let Some(f) = kit.fonts.first() {
+                    preset.spec.style.font = f.clone();
+                }
+                if let Some(c) = kit.colours.first() {
+                    preset.spec.style.color = *c;
+                }
+                preset.spec.text = "Your brand text".into();
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::AddText(preset));
+                }
+            }
+            B::AddLogo(id) => {
+                changed = false;
+                let item = rw_model::Item::sticker_item(
+                    rw_model::StickerRef {
+                        pack: rw_assets::brand::LOGO_PACK.into(),
+                        id,
+                    },
+                    rw_model::Time::ZERO,
+                );
+                if let Some(s) = self.session.as_mut() {
+                    s.apply(EditorAction::AddGraphic(item));
+                }
+            }
+            _ => changed = false,
+        }
+        if changed {
+            result = self.bin.brand.save(&dir);
+        }
+        if let Err(e) = result
+            && let Some(s) = self.session.as_mut()
+        {
+            s.notify_error(format!("Brand kit: {e}"));
+        }
+        self.reload_brand();
     }
 
     /// Folder exports go to unless the user picks another.
@@ -607,6 +754,7 @@ impl EditorUi {
                 ui.set_min_size(ui.available_size());
                 action = home::show(ui, &mut self.home, &mut self.textures, tokens);
             });
+            home::about(&ctx, &mut self.home.about, tokens);
             if let Some(a) = action {
                 self.handle_home_action(a);
             }

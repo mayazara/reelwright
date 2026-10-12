@@ -37,6 +37,50 @@ pub enum HomeAction {
     ToggleTheme,
 }
 
+pub const ABOUT_LABEL: &str = "About";
+
+/// The About window: what the app is and whose work it includes.
+pub fn about(ctx: &egui::Context, open: &mut bool, tokens: Tokens) {
+    if !*open {
+        return;
+    }
+    let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
+        ui.set_width(560.0);
+        ui.label(heading(app::NAME, 22.0).color(tokens.text));
+        ui.label(RichText::new(format!("Version {}", app::VERSION)).color(tokens.text_muted));
+        ui.label("A video editor that works entirely on this computer.");
+        ui.add_space(8.0);
+        egui::Grid::new("credits")
+            .num_columns(2)
+            .spacing([12.0, 6.0])
+            .show(ui, |ui| {
+                for (what, who) in rw_assets::CREDITS {
+                    ui.label(RichText::new(*what).strong());
+                    ui.add(egui::Label::new(*who).wrap());
+                    ui.end_row();
+                }
+            });
+        ui.add_space(6.0);
+        egui::CollapsingHeader::new("Every bundled file and its licence").show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .max_height(260.0)
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(RichText::new(rw_assets::ATTRIBUTION).small().monospace())
+                            .wrap(),
+                    );
+                });
+        });
+        ui.add_space(8.0);
+        if ui.button("Close").clicked() {
+            *open = false;
+        }
+    });
+    if modal.should_close() {
+        *open = false;
+    }
+}
+
 /// State of the "New project" dialog.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NewProjectDialog {
@@ -67,6 +111,8 @@ impl NewProjectDialog {
 
 #[derive(Default)]
 pub struct HomeState {
+    /// The About window is open.
+    pub about: bool,
     pub projects: Vec<ProjectSummary>,
     pub new_dialog: Option<NewProjectDialog>,
     pub confirm_delete: Option<(PathBuf, String)>,
@@ -109,6 +155,9 @@ pub fn show(
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if ui.button(THEME_TOGGLE_LABEL).clicked() {
                             action = Some(HomeAction::ToggleTheme);
+                        }
+                        if ui.button(ABOUT_LABEL).clicked() {
+                            state.about = true;
                         }
                     });
                 });

@@ -57,6 +57,8 @@ pub enum LibraryTab {
     Media,
     Text,
     Graphics,
+    Sounds,
+    Brand,
     Backgrounds,
     Transitions,
 }
@@ -69,6 +71,10 @@ pub struct BinState {
     pub sort: SortKey,
     pub renaming: Option<(MediaId, String)>,
     pub graphics: crate::graphics_library::GraphicsState,
+    /// The brand kit (loaded by the editor).
+    pub brand: rw_assets::brand::BrandKit,
+    pub brand_logos: Vec<String>,
+    pub brand_state: crate::brand_kit::BrandState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,6 +89,9 @@ pub enum BinAction {
     AddTransition(rw_model::TransitionKind),
     AddText(crate::actions::TextItem),
     AddGraphic(rw_model::Item),
+    Brand(crate::brand_kit::BrandAction),
+    /// Put a bundled sound at the playhead.
+    AddSound(&'static str),
 }
 
 /// Media to show, filtered and sorted. Search matches the name
@@ -125,16 +134,59 @@ pub fn show(
     tokens: Tokens,
 ) -> Option<BinAction> {
     let mut action = None;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.selectable_value(&mut state.tab, LibraryTab::Media, "Your media");
         ui.selectable_value(&mut state.tab, LibraryTab::Text, "Text");
         ui.selectable_value(&mut state.tab, LibraryTab::Graphics, "Graphics");
+        ui.selectable_value(&mut state.tab, LibraryTab::Sounds, "Sounds");
+        ui.selectable_value(&mut state.tab, LibraryTab::Brand, "Brand kit");
         ui.selectable_value(&mut state.tab, LibraryTab::Backgrounds, "Backgrounds");
         ui.selectable_value(&mut state.tab, LibraryTab::Transitions, "Transitions");
     });
     ui.separator();
     if state.tab == LibraryTab::Backgrounds {
         return crate::backgrounds::show(ui, tokens).map(BinAction::AddGenerated);
+    }
+    if state.tab == LibraryTab::Sounds {
+        let mut chosen = None;
+        ui.label(
+            RichText::new("Click to add at the playhead on a sound track.")
+                .small()
+                .color(tokens.text_muted),
+        );
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for (name, data) in rw_assets::sounds::SOUNDS {
+                // WAV: 48 kHz stereo 16-bit after a 44-byte header.
+                let secs = (data.len().saturating_sub(44)) as f64 / (48_000.0 * 4.0);
+                ui.horizontal(|ui| {
+                    if ui
+                        .add(
+                            egui::Button::new(rw_assets::sounds::label(name))
+                                .min_size(egui::vec2(160.0, 0.0)),
+                        )
+                        .clicked()
+                    {
+                        chosen = Some(BinAction::AddSound(name));
+                    }
+                    ui.label(
+                        RichText::new(format!("{secs:.1} s"))
+                            .small()
+                            .color(tokens.text_muted),
+                    );
+                });
+            }
+        });
+        return chosen;
+    }
+    if state.tab == LibraryTab::Brand {
+        return crate::brand_kit::show(
+            ui,
+            &state.brand,
+            &state.brand_logos,
+            &mut state.brand_state,
+            tokens,
+        )
+        .map(BinAction::Brand);
     }
     if state.tab == LibraryTab::Graphics {
         return crate::graphics_library::show(ui, &mut state.graphics, tokens)

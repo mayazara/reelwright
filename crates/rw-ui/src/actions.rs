@@ -70,6 +70,10 @@ pub enum EditorAction {
         row: DropRow,
         at: Time,
     },
+    /// Colour the selected text, shapes, visualisers and backgrounds.
+    ApplyColour(rw_model::Rgba),
+    /// Set the selected text's font.
+    ApplyFont(String),
     /// Add a text item at the playhead on a text track.
     AddText(TextItem),
     /// Drop a text item at `at` on `row`.

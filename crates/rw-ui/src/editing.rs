@@ -170,6 +170,23 @@ impl Session {
         self.apply(EditorAction::InsertMedia { media, row, at });
     }
 
+    /// Runs `ops` as one undo step, or tells the user `hint` if none apply.
+    fn run_all(&mut self, label: &str, ops: Vec<TimelineOp>, hint: &str) {
+        match ops.len() {
+            0 => self.notify(hint),
+            1 => {
+                self.op(ops.into_iter().next().expect("one"));
+            }
+            _ => {
+                let cmds: Vec<Box<dyn Command>> = ops
+                    .into_iter()
+                    .map(|op| Box::new(TimelineEdit::new(op)) as Box<dyn Command>)
+                    .collect();
+                let _ = self.execute(Box::new(Compound::new(label, cmds)));
+            }
+        }
+    }
+
     pub fn apply(&mut self, action: EditorAction) {
         let fps = self.project.canvas.frame_rate;
         match action {
@@ -394,6 +411,73 @@ impl Session {
                 }
             }
             EditorAction::Notice(text) => self.notify(text),
+            EditorAction::ApplyColour(c) => {
+                let mut ops = Vec::new();
+                for item in self
+                    .project
+                    .items()
+                    .filter(|i| self.selection.contains(&i.id))
+                {
+                    let id = item.id;
+                    let op = match &item.kind {
+                        rw_model::ItemKind::Text { text } => {
+                            let mut t = (**text).clone();
+                            t.style.color = c;
+                            Some(TimelineOp::SetText { item: id, text: t })
+                        }
+                        rw_model::ItemKind::Shape { shape } => {
+                            let mut s = shape.clone();
+                            if s.kind.is_line() {
+                                if let Some(st) = &mut s.stroke {
+                                    st.color = c;
+                                }
+                            } else {
+                                s.fill = Some(c);
+                            }
+                            Some(TimelineOp::SetShape { item: id, shape: s })
+                        }
+                        rw_model::ItemKind::Visualiser { visualiser } => {
+                            let mut v = visualiser.clone();
+                            v.color = c;
+                            Some(TimelineOp::SetVisualiser {
+                                item: id,
+                                visualiser: v,
+                            })
+                        }
+                        rw_model::ItemKind::Generated { .. } => Some(TimelineOp::SetFill {
+                            items: vec![id],
+                            fill: rw_model::Generated::Solid { color: c },
+                        }),
+                        _ => None,
+                    };
+                    ops.extend(op);
+                }
+                self.run_all(
+                    "Apply brand colour",
+                    ops,
+                    "Select text, a shape or a background to colour.",
+                );
+            }
+            EditorAction::ApplyFont(font) => {
+                let ops: Vec<TimelineOp> = self
+                    .project
+                    .items()
+                    .filter(|i| self.selection.contains(&i.id))
+                    .filter_map(|i| {
+                        let mut t = i.text()?.clone();
+                        t.style.font = font.clone();
+                        Some(TimelineOp::SetText {
+                            item: i.id,
+                            text: t,
+                        })
+                    })
+                    .collect();
+                self.run_all(
+                    "Apply brand font",
+                    ops,
+                    "Select some text to change its font.",
+                );
+            }
             EditorAction::AddGraphic(item) => {
                 let at = self.playhead();
                 let end = at + item.duration;
