@@ -1114,7 +1114,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
     // Transitions dragged from the library land on the nearest cut.
     if let Some(p) = pointer.filter(|p| tracks.contains(*p)) {
         let hovered = body_resp.dnd_hover_payload::<TransitionKind>().is_some();
-        let released = body_resp.dnd_release_payload::<TransitionKind>();
+        let released = released::<TransitionKind>(&body_resp);
         if hovered || released.is_some() {
             let cuts = logic::cuts(project);
             let cut = rows.iter().find(|r| row_rect(r).contains(p)).and_then(|r| {
@@ -1169,7 +1169,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 StrokeKind::Inside,
             );
         }
-        if let Some(fill) = body_resp.dnd_release_payload::<rw_model::Generated>() {
+        if let Some(fill) = released::<rw_model::Generated>(&body_resp) {
             let row = logic::drop_row(
                 project,
                 &rows,
@@ -1183,7 +1183,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 at,
             });
         }
-        if let Some(media) = body_resp.dnd_release_payload::<MediaId>()
+        if let Some(media) = released::<MediaId>(&body_resp)
             && let Some(m) = project.media(*media)
         {
             let kind = track_kind_for(m.kind());
@@ -1215,6 +1215,16 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
         ));
     }
     out
+}
+
+/// What of type `P` is dropped on `resp` this frame. egui hands the payload
+/// to the first taker whatever its type, so only take it when it's a `P`.
+fn released<P: std::any::Any + Send + Sync>(resp: &egui::Response) -> Option<Arc<P>> {
+    if egui::DragAndDrop::has_payload_of_type::<P>(&resp.ctx) {
+        resp.dnd_release_payload::<P>()
+    } else {
+        None
+    }
 }
 
 fn drop_time(project: &Project, t: Time, snap_on: bool, threshold: Time, playhead: Time) -> Time {
