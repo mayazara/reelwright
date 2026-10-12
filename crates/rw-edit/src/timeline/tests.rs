@@ -611,7 +611,7 @@ fn any_edit() -> impl Strategy<Value = Gen> {
     let i = 0usize..12;
     let t = -2i64..40;
     prop_oneof![
-        3 => (0usize..5, 0usize..6, any::<bool>(), t.clone()).prop_map(|(media, track, new_track, at)| Gen::Insert { media, track, new_track, at }),
+        3 => (0usize..7, 0usize..6, any::<bool>(), t.clone()).prop_map(|(media, track, new_track, at)| Gen::Insert { media, track, new_track, at }),
         2 => (i.clone(), -8i64..8, proptest::option::of(0usize..6)).prop_map(|(item, delta, track)| Gen::Move { item, delta, track }),
         2 => (i.clone(), any::<bool>(), t.clone(), any::<bool>()).prop_map(|(item, start, to, ripple)| Gen::Trim { item, start, to, ripple }),
         1 => (i.clone(), 0i64..12).prop_map(|(item, to)| Gen::Slip { item, to }),
@@ -648,12 +648,21 @@ fn op_for(g: &Gen, p: &Project) -> Option<TimelineOp> {
             new_track,
             at,
         } => {
-            // Index 3 is a generated background clip, 4 a text item.
+            // Index 3 is a generated background clip, 4 a text item, 5 a
+            // shape and 6 a visualiser.
             let (kind, item) = match (p.media.get(*media), *media) {
                 (Some(m), _) => (track_kind_for(m.kind()), Item::new(m, Time::ZERO)),
                 (None, 3) => (
                     TrackKind::Video,
                     Item::generated(Generated::Solid { color: Rgba::BLACK }, Time::ZERO),
+                ),
+                (None, 5) => (
+                    TrackKind::Video,
+                    Item::shape_item(ShapeSpec::new(ShapeKind::Arrow), Time::ZERO),
+                ),
+                (None, 6) => (
+                    TrackKind::Overlay,
+                    Item::visualiser_item(VisualiserSpec::new(VisualiserStyle::Bars), Time::ZERO),
                 ),
                 (None, _) => (
                     TrackKind::Text,
