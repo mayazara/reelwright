@@ -5,9 +5,11 @@ no internet connection — your projects and media never leave your machine.
 
 > **Early development.** Projects, importing, a multi-track timeline,
 > playback, cutting and trimming, transforms, crop, colour adjustment,
-> filters, blend modes, fades, colour/gradient backgrounds and MP4 export
-> work today. Text, effects, transitions, recording and on-device AI tools
-> are on the way — see [`PLAN.md`](PLAN.md) and [`PROGRESS.md`](PROGRESS.md).
+> filters, blend modes, fades, colour/gradient backgrounds, effects
+> (including green screen), transitions, speed changes with pitch-kept
+> sound, reverse, freeze frames and MP4 export work today. Text, more
+> export formats, recording and on-device AI tools are on the way — see
+> [`PLAN.md`](PLAN.md) and [`PROGRESS.md`](PROGRESS.md).
 
 ## Install
 
