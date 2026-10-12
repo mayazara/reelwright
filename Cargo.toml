@@ -61,5 +61,12 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 dbg_macro = "warn"
 
+# Small debug builds: line numbers for our crates (enough for backtraces),
+# no debug info for dependencies. Full debug info made `target/` exceed
+# 100 GB across the test binaries.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.dev.package."*"]
 opt-level = 2
+debug = false
