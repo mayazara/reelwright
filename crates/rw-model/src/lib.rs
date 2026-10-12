@@ -3,6 +3,7 @@
 //! Everything here is plain data. Changes go through `rw-edit` commands so
 //! they can be undone; I/O is limited to reading and writing project folders.
 
+pub mod effects;
 pub mod file;
 pub mod ids;
 pub mod library;
@@ -11,11 +12,15 @@ pub mod project;
 pub mod time;
 pub mod visual;
 
+pub use effects::{
+    DEFAULT_TRANSITION, Effect, EffectKind, MAX_TRANSITION, MIN_TRANSITION, Transition,
+    TransitionId, TransitionKind,
+};
 pub use ids::{GroupId, ItemId, MarkerId, MediaId, ProjectId, TrackId};
 pub use media::{AudioInfo, ContentHash, MediaInfo, MediaKind, MediaRef, VideoInfo};
 pub use project::{
-    AspectPreset, Canvas, IMAGE_DURATION, Item, ItemKind, MAX_GAIN, Marker, Project, Rgba, Track,
-    TrackKind, default_duration, max_duration, track_kind_for,
+    AspectPreset, Canvas, IMAGE_DURATION, Item, ItemKind, MAX_GAIN, MAX_SPEED, MIN_SPEED, Marker,
+    Project, Rgba, Track, TrackKind, default_duration, max_duration, track_kind_for,
 };
 pub use time::{FrameRate, TICKS_PER_SECOND, Time};
 pub use visual::{

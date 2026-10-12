@@ -418,6 +418,8 @@ pub struct Look {
     pub blend: BlendMode,
     pub color: ColorAdjust,
     pub filter: Option<Filter>,
+    /// Applied in order, before colour and filter.
+    pub effects: Vec<crate::effects::Effect>,
     /// Fades apply to both picture and sound.
     pub fade_in: Time,
     pub fade_out: Time,
@@ -432,6 +434,7 @@ impl Default for Look {
             blend: BlendMode::Normal,
             color: ColorAdjust::default(),
             filter: None,
+            effects: Vec::new(),
             fade_in: Time::ZERO,
             fade_out: Time::ZERO,
         }
@@ -467,6 +470,18 @@ impl Look {
             1.0
         };
         self.color = self.color.sanitized();
+        for e in &mut self.effects {
+            e.intensity = if e.intensity.is_finite() {
+                e.intensity.clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            for p in &mut e.params {
+                if !p.is_finite() {
+                    *p = 0.0;
+                }
+            }
+        }
         if let Some(f) = &mut self.filter {
             f.intensity = if f.intensity.is_finite() {
                 f.intensity.clamp(0.0, 1.0)

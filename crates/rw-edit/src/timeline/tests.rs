@@ -577,6 +577,27 @@ enum Gen {
         item: usize,
         shade: u8,
     },
+    Speed {
+        item: usize,
+        speed: u8,
+    },
+    Reverse {
+        item: usize,
+        on: bool,
+    },
+    Freeze {
+        item: usize,
+        at: i64,
+        secs: i64,
+    },
+    Transition {
+        item: usize,
+        kind: usize,
+        millis: i64,
+    },
+    RemoveTransition {
+        n: usize,
+    },
     Undo,
     Redo,
 }
@@ -600,6 +621,11 @@ fn any_edit() -> impl Strategy<Value = Gen> {
         2 => (i.clone(), 0i64..8, 0i64..8, any::<u8>(), any::<u8>())
             .prop_map(|(item, fade_in, fade_out, scale, opacity)| Gen::Look { item, fade_in, fade_out, scale, opacity }),
         1 => (i.clone(), any::<u8>()).prop_map(|(item, shade)| Gen::Fill { item, shade }),
+        2 => (i.clone(), any::<u8>()).prop_map(|(item, speed)| Gen::Speed { item, speed }),
+        1 => (i.clone(), any::<bool>()).prop_map(|(item, on)| Gen::Reverse { item, on }),
+        1 => (i.clone(), t.clone(), 0i64..4).prop_map(|(item, at, secs)| Gen::Freeze { item, at, secs }),
+        2 => (i.clone(), 0usize..20, 0i64..5000).prop_map(|(item, kind, millis)| Gen::Transition { item, kind, millis }),
+        1 => (0usize..4).prop_map(|n| Gen::RemoveTransition { n }),
         2 => Just(Gen::Undo),
         1 => Just(Gen::Redo),
     ]
@@ -715,6 +741,40 @@ fn op_for(g: &Gen, p: &Project) -> Option<TimelineOp> {
                 color: Rgba([*shade, *shade, *shade, 255]),
             },
         },
+        Gen::Speed { item: n, speed } => TimelineOp::SetSpeed {
+            items: vec![item(*n)?],
+            // 0.0 to 17.0: below and above the allowed range too.
+            speed: f32::from(*speed) / 15.0,
+        },
+        Gen::Reverse { item: n, on } => TimelineOp::SetReverse {
+            items: vec![item(*n)?],
+            reverse: *on,
+        },
+        Gen::Freeze { item: n, at, secs } => TimelineOp::Freeze {
+            item: item(*n)?,
+            at: S(*at),
+            duration: S(*secs),
+        },
+        Gen::Transition {
+            item: n,
+            kind,
+            millis,
+        } => TimelineOp::AddTransition {
+            a: item(*n)?,
+            kind: TransitionKind::ALL[*kind],
+            duration: Time::from_millis(*millis),
+        },
+        Gen::RemoveTransition { n } => {
+            let all: Vec<TransitionId> = p
+                .tracks
+                .iter()
+                .flat_map(|t| &t.transitions)
+                .map(|t| t.id)
+                .collect();
+            TimelineOp::RemoveTransition {
+                id: *all.get(n % all.len().max(1))?,
+            }
+        }
         Gen::Undo | Gen::Redo => return None,
     })
 }
@@ -767,9 +827,19 @@ proptest! {
             for item in p.items() {
                 prop_assert!(item.look.fade_in + item.look.fade_out <= item.duration, "fades overflow: {item:?}");
                 prop_assert!((0.0..=1.0).contains(&item.look.opacity));
+                prop_assert!((MIN_SPEED..=MAX_SPEED).contains(&item.speed));
                 let Some(m) = item.media().and_then(|id| p.media(id)) else { continue };
                 if let Some(max) = max_duration(m, Time::ZERO) {
-                    prop_assert!(item.source_in + item.duration <= max, "item runs past its source: {item:?}");
+                    if let Some(at) = item.held_frame() {
+                        prop_assert!(at >= Time::ZERO && at < max, "held frame outside its source: {item:?}");
+                        continue;
+                    }
+                    // Allow rounding of a couple of ticks (a few nanoseconds).
+                    prop_assert!(item.source_in + item.source_span() <= max + Time(2), "item runs past its source: {item:?}");
+                    for t in [item.start, item.end() - Time(1)] {
+                        let s = item.source_time(t);
+                        prop_assert!(s >= item.source_in && s <= max + Time(2), "source time {s:?} outside source: {item:?}");
+                    }
                 }
             }
         }

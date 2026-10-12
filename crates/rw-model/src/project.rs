@@ -149,7 +149,16 @@ pub enum ItemKind {
     Generated {
         fill: crate::visual::Generated,
     },
+    /// One frame of a video held still (freeze frame).
+    Frame {
+        media: MediaId,
+        at: Time,
+    },
 }
+
+/// Slowest and fastest playback speed.
+pub const MIN_SPEED: f32 = 0.1;
+pub const MAX_SPEED: f32 = 16.0;
 
 /// Highest item or track gain, +12 dB.
 pub const MAX_GAIN: f32 = 3.981_072;
@@ -190,9 +199,27 @@ pub struct Item {
     /// the sound is not played twice.
     #[serde(default, skip_serializing_if = "is_false")]
     pub audio_detached: bool,
-    /// Placement, crop, blending, colour and fades.
+    /// Placement, crop, blending, colour, effects and fades.
     #[serde(default, skip_serializing_if = "crate::visual::Look::is_default")]
     pub look: crate::visual::Look,
+    /// Playback speed, `MIN_SPEED..=MAX_SPEED`. The item covers
+    /// `duration × speed` of its source.
+    #[serde(default = "unity", skip_serializing_if = "is_unity")]
+    pub speed: f32,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub reverse: bool,
+    /// When sped up or slowed down, keep the sound's pitch (default) or let
+    /// it follow the speed.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub keep_pitch: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_true(v: &bool) -> bool {
+    *v
 }
 
 impl Item {
@@ -209,6 +236,9 @@ impl Item {
             muted: false,
             audio_detached: false,
             look: crate::visual::Look::default(),
+            speed: 1.0,
+            reverse: false,
+            keep_pitch: true,
         }
     }
 
@@ -225,6 +255,9 @@ impl Item {
             muted: false,
             audio_detached: false,
             look: crate::visual::Look::default(),
+            speed: 1.0,
+            reverse: false,
+            keep_pitch: true,
         }
     }
 
@@ -232,9 +265,22 @@ impl Item {
         self.start + self.duration
     }
 
+    /// A held frame of `media` at source time `at`.
+    pub fn frame(media: MediaId, at: Time, start: Time, duration: Time) -> Self {
+        Item {
+            kind: ItemKind::Frame { media, at },
+            duration,
+            ..Item::generated(
+                crate::visual::Generated::Solid { color: Rgba::BLACK },
+                start,
+            )
+        }
+    }
+
+    /// The media file this item shows or plays (including held frames).
     pub fn media(&self) -> Option<MediaId> {
         match self.kind {
-            ItemKind::Media { media } => Some(media),
+            ItemKind::Media { media } | ItemKind::Frame { media, .. } => Some(media),
             ItemKind::Generated { .. } => None,
         }
     }
@@ -242,8 +288,26 @@ impl Item {
     pub fn generated_fill(&self) -> Option<crate::visual::Generated> {
         match self.kind {
             ItemKind::Generated { fill } => Some(fill),
-            ItemKind::Media { .. } => None,
+            _ => None,
         }
+    }
+
+    /// Source time of a held frame.
+    pub fn held_frame(&self) -> Option<Time> {
+        match self.kind {
+            ItemKind::Frame { at, .. } => Some(at),
+            _ => None,
+        }
+    }
+
+    /// How much of the source the item covers: `duration × speed`.
+    pub fn source_span(&self) -> Time {
+        Time((self.duration.ticks() as f64 * f64::from(self.speed)).round() as i64)
+    }
+
+    /// Timeline length that covers `span` of source at this speed.
+    pub fn duration_for_span(&self, span: Time) -> Time {
+        Time((span.ticks() as f64 / f64::from(self.speed.max(MIN_SPEED))).round() as i64)
     }
 
     /// Whether `t` falls inside the item (start inclusive, end exclusive).
@@ -251,9 +315,20 @@ impl Item {
         self.start <= t && t < self.end()
     }
 
-    /// Source time shown at timeline time `t`.
+    /// Source time shown at timeline time `t` (speed and reverse applied;
+    /// a held frame always shows its frame).
     pub fn source_time(&self, t: Time) -> Time {
-        self.source_in + (t - self.start)
+        if let Some(at) = self.held_frame() {
+            return at;
+        }
+        let offset = Time(((t - self.start).ticks() as f64 * f64::from(self.speed)).round() as i64);
+        if self.reverse {
+            // Last frame of the span first; stay inside the span.
+            let last = self.source_in + self.source_span() - Time(1);
+            (last - offset).max(self.source_in)
+        } else {
+            self.source_in + offset
+        }
     }
 }
 
@@ -302,6 +377,9 @@ pub struct Track {
     #[serde(default = "unity", skip_serializing_if = "is_unity")]
     pub gain: f32,
     pub items: Vec<Item>,
+    /// Transitions between adjacent items on this track.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transitions: Vec<crate::effects::Transition>,
 }
 
 impl Track {
@@ -315,6 +393,7 @@ impl Track {
             muted: false,
             gain: 1.0,
             items: Vec::new(),
+            transitions: Vec::new(),
         }
     }
 

@@ -17,8 +17,9 @@
 
 use crate::{Command, EditError};
 use rw_model::{
-    BlendMode, ColorAdjust, Crop, Filter, Generated, GroupId, Item, ItemId, Look, MAX_GAIN,
-    MediaKind, MediaRef, Project, Time, Track, TrackId, TrackKind, Transform, max_duration,
+    BlendMode, ColorAdjust, Crop, Effect, Filter, Generated, GroupId, Item, ItemId, Look, MAX_GAIN,
+    MAX_SPEED, MAX_TRANSITION, MIN_SPEED, MIN_TRANSITION, MediaKind, MediaRef, Project, Time,
+    Track, TrackId, TrackKind, Transform, Transition, TransitionId, TransitionKind, max_duration,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -127,6 +128,43 @@ pub enum TimelineOp {
         items: Vec<ItemId>,
         fill: Generated,
     },
+    /// Plays clips faster or slower. They keep their content, so their
+    /// length changes; later clips on the track move with them.
+    SetSpeed {
+        items: Vec<ItemId>,
+        speed: f32,
+    },
+    SetReverse {
+        items: Vec<ItemId>,
+        reverse: bool,
+    },
+    /// Whether sped-up or slowed-down sound keeps its pitch.
+    SetKeepPitch {
+        items: Vec<ItemId>,
+        keep: bool,
+    },
+    /// Holds the frame shown at `at` for `duration`, inserted at `at`
+    /// (splitting the clip there). Later clips on the track move along.
+    Freeze {
+        item: ItemId,
+        at: Time,
+        duration: Time,
+    },
+    /// Adds (or replaces) a transition from `a` into the clip right after
+    /// it on the same track.
+    AddTransition {
+        a: ItemId,
+        kind: TransitionKind,
+        duration: Time,
+    },
+    SetTransition {
+        id: TransitionId,
+        kind: Option<TransitionKind>,
+        duration: Option<Time>,
+    },
+    RemoveTransition {
+        id: TransitionId,
+    },
 }
 
 /// A partial change to [`Look`]; applied field by field.
@@ -141,6 +179,7 @@ pub struct LookPatch {
     pub filter: Option<Option<Filter>>,
     pub fade_in: Option<Time>,
     pub fade_out: Option<Time>,
+    pub effects: Option<Vec<Effect>>,
 }
 
 impl LookPatch {
@@ -168,6 +207,9 @@ impl LookPatch {
         }
         if let Some(v) = self.fade_out {
             look.fade_out = v;
+        }
+        if let Some(v) = &self.effects {
+            look.effects = v.clone();
         }
     }
 
@@ -204,6 +246,8 @@ impl TimelineOp {
                     "Adjust colour".into()
                 } else if patch.filter.is_some() {
                     "Filter".into()
+                } else if patch.effects.is_some() {
+                    "Effects".into()
                 } else if patch.fade_in.is_some() || patch.fade_out.is_some() {
                     "Fade".into()
                 } else if patch.blend.is_some() || patch.opacity.is_some() {
@@ -213,6 +257,14 @@ impl TimelineOp {
                 }
             }
             TimelineOp::SetFill { .. } => "Change background".into(),
+            TimelineOp::SetSpeed { .. } => "Change speed".into(),
+            TimelineOp::SetReverse { reverse: true, .. } => "Reverse".into(),
+            TimelineOp::SetReverse { .. } => "Play forward".into(),
+            TimelineOp::SetKeepPitch { .. } => "Change pitch handling".into(),
+            TimelineOp::Freeze { .. } => "Freeze frame".into(),
+            TimelineOp::AddTransition { .. } => "Add transition".into(),
+            TimelineOp::SetTransition { .. } => "Change transition".into(),
+            TimelineOp::RemoveTransition { .. } => "Remove transition".into(),
             TimelineOp::SetTrack { change, .. } => match change {
                 TrackChange::Locked(true) => "Lock track",
                 TrackChange::Locked(false) => "Unlock track",
@@ -257,6 +309,10 @@ impl Ids {
 
     fn group(&mut self) -> GroupId {
         GroupId(self.take())
+    }
+
+    fn transition(&mut self) -> TransitionId {
+        TransitionId(self.take())
     }
 }
 
@@ -391,6 +447,23 @@ impl Ctx<'_> {
             .and_then(|id| self.media.iter().find(|m| m.id == id))
     }
 
+    /// Length of the item's source, or `None` when the item can be any
+    /// length (stills, held frames, backgrounds).
+    fn source_total(&self, item: &Item) -> Option<Time> {
+        if item.held_frame().is_some() {
+            return None;
+        }
+        self.media(item).and_then(|m| max_duration(m, Time::ZERO))
+    }
+
+    /// Whether speed and direction apply: clips that play their source.
+    fn retimable(&self, item: &Item) -> bool {
+        item.held_frame().is_none()
+            && self
+                .media(item)
+                .is_some_and(|m| matches!(m.kind(), MediaKind::Video | MediaKind::Audio))
+    }
+
     fn resolve(
         &mut self,
         tracks: &mut Vec<Track>,
@@ -522,27 +595,52 @@ impl Ctx<'_> {
                     let (t, i) = locate(tracks, id).ok_or(EditError::NotFound("item"))?;
                     let main = tracks[t].main;
                     let it = tracks[t].items[i].clone();
-                    let limit = self.media(&it).and_then(|m| max_duration(m, Time::ZERO));
+                    let total = self.source_total(&it);
+                    let speed = f64::from(it.speed);
+                    let src = |d: Time| Time((d.ticks() as f64 * speed).round() as i64);
+                    let tl = |s: Time| Time((s.ticks() as f64 / speed).floor() as i64);
                     let mut next = it.clone();
                     match edge {
                         Edge::Start => {
-                            // Can't reveal source before its beginning or past the end.
-                            let earliest = -next.source_in;
-                            let latest = next.duration - self.min;
-                            let d = delta.max(earliest).min(latest);
-                            let d = if main { d } else { d.max(-next.start) };
-                            next.source_in += d;
+                            // d > 0 shortens from the start, d < 0 reveals more.
+                            let mut earliest = Time(i64::MIN / 4);
+                            if let Some(total) = total {
+                                earliest = if it.reverse {
+                                    it.duration - tl(total - it.source_in)
+                                } else {
+                                    -tl(it.source_in)
+                                };
+                            }
+                            let latest = it.duration - self.min;
+                            let mut d = delta.max(earliest).min(latest);
+                            if !main {
+                                d = d.max(-it.start);
+                            }
+                            if !it.reverse && total.is_some() {
+                                next.source_in = (it.source_in + src(d)).max(Time::ZERO);
+                            }
                             if !main {
                                 next.start += d;
                             }
                             next.duration -= d;
                         }
                         Edge::End => {
-                            let mut dur = (next.duration + delta).max(self.min);
-                            if let Some(total) = limit {
-                                dur = dur.min((total - next.source_in).max(self.min));
+                            let mut dur = (it.duration + delta).max(self.min);
+                            if let Some(total) = total {
+                                let room = if it.reverse {
+                                    it.source_in + it.source_span()
+                                } else {
+                                    total - it.source_in
+                                };
+                                let room = tl(room);
+                                dur = dur.min(room.max(self.min));
                             }
-                            let change = dur - next.duration;
+                            if it.reverse && total.is_some() {
+                                // Extending a reversed clip shows earlier source.
+                                let extra = src(dur - it.duration);
+                                next.source_in = (it.source_in - extra).max(Time::ZERO);
+                            }
+                            let change = dur - it.duration;
                             next.duration = dur;
                             if *ripple && !main {
                                 for later in tracks[t].items.iter_mut() {
@@ -563,8 +661,8 @@ impl Ctx<'_> {
                     return Err(EditError::Invalid("the track is locked".into()));
                 }
                 let it = &tracks[t].items[i];
-                let max_in = match self.media(it).and_then(|m| max_duration(m, Time::ZERO)) {
-                    Some(total) => (total - it.duration).max(Time::ZERO),
+                let max_in = match self.source_total(it) {
+                    Some(total) => (total - it.source_span()).max(Time::ZERO),
                     None => Time::ZERO,
                 };
                 tracks[t].items[i].source_in = (*source_in).max(Time::ZERO).min(max_in);
@@ -594,8 +692,16 @@ impl Ctx<'_> {
                     let mut right = it.clone();
                     right.id = self.ids.item();
                     right.start = *at;
-                    right.source_in = it.source_in + left;
                     right.duration = it.duration - left;
+                    let speed = f64::from(it.speed);
+                    let span = |d: Time| Time((d.ticks() as f64 * speed).round() as i64);
+                    if it.reverse {
+                        // The left piece plays the end of the source span.
+                        tracks[t].items[i].source_in = it.source_in + span(right.duration);
+                        right.source_in = it.source_in;
+                    } else {
+                        right.source_in = it.source_in + span(left);
+                    }
                     right.group = it
                         .group
                         .map(|g| *new_groups.entry(g).or_insert_with(|| self.ids.group()));
@@ -603,6 +709,12 @@ impl Ctx<'_> {
                     right.look.fade_in = Time::ZERO;
                     tracks[t].items[i].look.fade_out = Time::ZERO;
                     tracks[t].items[i].duration = left;
+                    // A transition out of the item now leaves from its right piece.
+                    for tr in tracks[t].transitions.iter_mut() {
+                        if tr.a == id {
+                            tr.a = right.id;
+                        }
+                    }
                     tracks[t].items.insert(i + 1, right);
                 }
                 if !any {
@@ -752,6 +864,7 @@ impl Ctx<'_> {
                     let (t, i) = locate(tracks, id).ok_or(EditError::NotFound("item"))?;
                     let it = &tracks[t].items[i];
                     let free_length = it.generated_fill().is_some()
+                        || it.held_frame().is_some()
                         || self.media(it).is_some_and(|m| m.kind() == MediaKind::Image);
                     if free_length {
                         tracks[t].items[i].duration = (*duration).max(self.min);
@@ -760,7 +873,7 @@ impl Ctx<'_> {
                 }
                 if !any {
                     return Err(EditError::Invalid(
-                        "only still images and backgrounds have a set duration".into(),
+                        "only still images, held frames and backgrounds have a set duration".into(),
                     ));
                 }
             }
@@ -805,6 +918,162 @@ impl Ctx<'_> {
                 }
             }
 
+            TimelineOp::SetSpeed { items, speed } => {
+                if !speed.is_finite() {
+                    return Err(EditError::Invalid("speed must be a number".into()));
+                }
+                let speed = speed.clamp(MIN_SPEED, MAX_SPEED);
+                let ids = require_some(expand(tracks, items))?;
+                let mut any = false;
+                for id in ids {
+                    let (t, i) = locate(tracks, id).ok_or(EditError::NotFound("item"))?;
+                    let it = tracks[t].items[i].clone();
+                    if !self.retimable(&it) {
+                        continue;
+                    }
+                    any = true;
+                    let span = it.source_span();
+                    let mut next = it.clone();
+                    next.speed = speed;
+                    // Round down so the span never runs past the source.
+                    next.duration =
+                        Time((span.ticks() as f64 / f64::from(speed)).floor() as i64).max(self.min);
+                    // A clip held at one frame may now need a little more
+                    // source; take it from before the clip.
+                    if let Some(total) = self.source_total(&it) {
+                        let over = next.source_in + next.source_span() - total;
+                        if over > Time::ZERO {
+                            next.source_in = (next.source_in - over).max(Time::ZERO);
+                        }
+                    }
+                    let change = next.duration - it.duration;
+                    tracks[t].items[i] = next;
+                    shift_after(&mut tracks[t], id, it.end(), change);
+                }
+                if !any {
+                    return Err(EditError::Invalid(
+                        "only video and audio clips have a speed".into(),
+                    ));
+                }
+            }
+
+            TimelineOp::SetReverse { items, reverse } => {
+                let ids = require_some(expand(tracks, items))?;
+                let mut any = false;
+                for id in ids {
+                    let (t, i) = locate(tracks, id).ok_or(EditError::NotFound("item"))?;
+                    if self.retimable(&tracks[t].items[i]) {
+                        tracks[t].items[i].reverse = *reverse;
+                        any = true;
+                    }
+                }
+                if !any {
+                    return Err(EditError::Invalid(
+                        "only video and audio clips can be reversed".into(),
+                    ));
+                }
+            }
+
+            TimelineOp::SetKeepPitch { items, keep } => {
+                let ids = require_some(expand(tracks, items))?;
+                for id in ids {
+                    if let Some(i) = item_mut(tracks, id) {
+                        i.keep_pitch = *keep;
+                    }
+                }
+            }
+
+            TimelineOp::Freeze { item, at, duration } => {
+                let (t, i) = locate(tracks, *item).ok_or(EditError::NotFound("item"))?;
+                let it = tracks[t].items[i].clone();
+                let media = self.media(&it).filter(|m| m.kind() == MediaKind::Video);
+                let (Some(media), false) = (media, tracks[t].locked) else {
+                    return Err(EditError::Invalid("select a video clip to freeze".into()));
+                };
+                if !it.contains(*at) {
+                    return Err(EditError::Invalid(
+                        "the playhead isn't over this clip".into(),
+                    ));
+                }
+                let duration = (*duration).max(self.min);
+                let mut frame = Item::frame(media.id, it.source_time(*at), *at, duration);
+                frame.id = self.ids.item();
+                frame.look = it.look.clone();
+                frame.look.fade_in = Time::ZERO;
+                frame.look.fade_out = Time::ZERO;
+                let mut index = i;
+                if *at - it.start >= self.min {
+                    self.run(
+                        &TimelineOp::Split {
+                            at: *at,
+                            items: vec![*item],
+                        },
+                        tracks,
+                    )?;
+                    index += 1;
+                }
+                // Push everything from the freeze point along, then drop the
+                // frame into the gap.
+                let track = &mut tracks[t];
+                if !track.main {
+                    for later in track.items.iter_mut().filter(|o| o.start >= *at) {
+                        later.start += duration;
+                    }
+                }
+                track.items.insert(index, frame);
+            }
+
+            TimelineOp::AddTransition { a, kind, duration } => {
+                let (t, i) = locate(tracks, *a).ok_or(EditError::NotFound("item"))?;
+                let track = &tracks[t];
+                if track.locked || track.kind == TrackKind::Audio {
+                    return Err(EditError::Invalid(
+                        "transitions go between video clips".into(),
+                    ));
+                }
+                let first = &track.items[i];
+                let Some(second) = track.items.iter().find(|o| o.start == first.end()) else {
+                    return Err(EditError::Invalid(
+                        "a transition needs a clip right after this one".into(),
+                    ));
+                };
+                let b = second.id;
+                let id = self.ids.transition();
+                let track = &mut tracks[t];
+                track.transitions.retain(|tr| tr.a != *a && tr.b != b);
+                track.transitions.push(Transition {
+                    id,
+                    a: *a,
+                    b,
+                    kind: *kind,
+                    duration: *duration,
+                });
+            }
+
+            TimelineOp::SetTransition { id, kind, duration } => {
+                let tr = tracks
+                    .iter_mut()
+                    .filter(|t| !t.locked)
+                    .flat_map(|t| t.transitions.iter_mut())
+                    .find(|tr| tr.id == *id)
+                    .ok_or(EditError::NotFound("transition"))?;
+                if let Some(k) = kind {
+                    tr.kind = *k;
+                }
+                if let Some(d) = duration {
+                    tr.duration = *d;
+                }
+            }
+
+            TimelineOp::RemoveTransition { id } => {
+                let track = tracks
+                    .iter_mut()
+                    .filter(|t| !t.locked)
+                    .find(|t| t.transitions.iter().any(|tr| tr.id == *id))
+                    .ok_or(EditError::NotFound("transition"))?;
+                track.transitions.retain(|tr| tr.id != *id);
+            }
+
             TimelineOp::SetTrack { track, change } => {
                 let t = track_index(tracks, *track)?;
                 let tr = &mut tracks[t];
@@ -817,6 +1086,19 @@ impl Ctx<'_> {
             }
         }
         Ok(())
+    }
+}
+
+/// Moves items on a free track that start at or after `from` by `change`
+/// (the main track packs itself).
+fn shift_after(track: &mut Track, except: ItemId, from: Time, change: Time) {
+    if track.main {
+        return;
+    }
+    for later in track.items.iter_mut() {
+        if later.id != except && later.start >= from {
+            later.start = (later.start + change).max(Time::ZERO);
+        }
     }
 }
 
@@ -885,6 +1167,37 @@ fn normalize_with(tracks: &mut Vec<Track>, new_track_id: &mut dyn FnMut() -> Tra
         t += 1;
     }
     tracks.retain(|t| t.main || !t.items.is_empty());
+    for track in tracks.iter_mut() {
+        fix_transitions(track);
+    }
+}
+
+/// Drops transitions whose clips are no longer back to back on the track
+/// (or that sit on an audio track), keeps one per cut, and fits durations
+/// to the clips: each half of the window must lie within its clip.
+fn fix_transitions(track: &mut Track) {
+    if track.locked {
+        return;
+    }
+    if track.kind == TrackKind::Audio {
+        track.transitions.clear();
+        return;
+    }
+    let items = &track.items;
+    let mut cuts = HashSet::new();
+    track.transitions.retain_mut(|tr| {
+        let a = items.iter().find(|i| i.id == tr.a);
+        let b = items.iter().find(|i| i.id == tr.b);
+        let (Some(a), Some(b)) = (a, b) else {
+            return false;
+        };
+        if a.end() != b.start || !cuts.insert(tr.a) {
+            return false;
+        }
+        let fit = Time(2 * a.duration.min(b.duration).ticks());
+        tr.duration = tr.duration.clamp(MIN_TRANSITION, MAX_TRANSITION).min(fit);
+        true
+    });
 }
 
 /// Checks the invariants [`normalize`] establishes. Used by tests.
@@ -912,6 +1225,22 @@ pub fn check_invariants(tracks: &[Track]) -> Result<(), String> {
                 return Err(format!("track {n} items {} and {k} overlap", k - 1));
             }
             at = i.end();
+        }
+        for tr in &t.transitions {
+            let a = t.items.iter().find(|i| i.id == tr.a);
+            let b = t.items.iter().find(|i| i.id == tr.b);
+            match (a, b) {
+                (Some(a), Some(b)) if a.end() == b.start => {
+                    if tr.duration > Time(2 * a.duration.min(b.duration).ticks()) {
+                        return Err(format!("track {n} transition is longer than its clips"));
+                    }
+                }
+                _ => {
+                    return Err(format!(
+                        "track {n} has a transition between non-adjacent clips"
+                    ));
+                }
+            }
         }
     }
     Ok(())
