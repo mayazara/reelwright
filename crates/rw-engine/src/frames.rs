@@ -315,14 +315,11 @@ impl FrameSource {
             Some(layer)
         };
         let mut layers = Vec::new();
-        let mut slot = 0;
+        // Pictures are in draw order, the outgoing clip right after its draw.
+        let mut slots = 0..pictures.len();
         for d in &draws {
-            let incoming = layer_for(slot);
-            slot += 1;
-            let outgoing = d.from.map(|f| {
-                slot += 1;
-                (layer_for(slot - 1), f)
-            });
+            let incoming = slots.next().and_then(&mut layer_for);
+            let outgoing = d.from.map(|f| (slots.next().and_then(&mut layer_for), f));
             let layer = match (incoming, outgoing) {
                 (Some(mut layer), Some((Some(from), f))) => {
                     layer.transition = Some(Box::new(LayerTransition {
