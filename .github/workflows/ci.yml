@@ -57,6 +57,8 @@ jobs:
     env:
       RW_MIN_FIXTURES: ${{ matrix.min_fixtures }}
       RW_REQUIRE_GPU: ${{ matrix.require_gpu }}
+      # CJK and emoji text come from system fonts; every runner has them.
+      RW_REQUIRE_SCRIPT_FONTS: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

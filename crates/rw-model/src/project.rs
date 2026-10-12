@@ -154,6 +154,10 @@ pub enum ItemKind {
         media: MediaId,
         at: Time,
     },
+    /// A title, lower third, credits or other text.
+    Text {
+        text: Box<crate::text::TextSpec>,
+    },
 }
 
 /// Slowest and fastest playback speed.
@@ -266,6 +270,19 @@ impl Item {
     }
 
     /// A held frame of `media` at source time `at`.
+    /// A text item at `start`, 5 s long.
+    pub fn text_item(spec: crate::text::TextSpec, start: Time) -> Self {
+        Item {
+            kind: ItemKind::Text {
+                text: Box::new(spec),
+            },
+            ..Item::generated(
+                crate::visual::Generated::Solid { color: Rgba::BLACK },
+                start,
+            )
+        }
+    }
+
     pub fn frame(media: MediaId, at: Time, start: Time, duration: Time) -> Self {
         Item {
             kind: ItemKind::Frame { media, at },
@@ -281,7 +298,7 @@ impl Item {
     pub fn media(&self) -> Option<MediaId> {
         match self.kind {
             ItemKind::Media { media } | ItemKind::Frame { media, .. } => Some(media),
-            ItemKind::Generated { .. } => None,
+            ItemKind::Generated { .. } | ItemKind::Text { .. } => None,
         }
     }
 
@@ -313,6 +330,14 @@ impl Item {
     /// Whether `t` falls inside the item (start inclusive, end exclusive).
     pub fn contains(&self, t: Time) -> bool {
         self.start <= t && t < self.end()
+    }
+
+    /// The text this item shows, for text items.
+    pub fn text(&self) -> Option<&crate::text::TextSpec> {
+        match &self.kind {
+            ItemKind::Text { text } => Some(text),
+            _ => None,
+        }
     }
 
     /// Source time shown at timeline time `t` (speed and reverse applied;

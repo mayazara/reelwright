@@ -9,6 +9,7 @@ pub mod ids;
 pub mod library;
 pub mod media;
 pub mod project;
+pub mod text;
 pub mod time;
 pub mod visual;
 
@@ -21,6 +22,10 @@ pub use media::{AudioInfo, ContentHash, MediaInfo, MediaKind, MediaRef, VideoInf
 pub use project::{
     AspectPreset, Canvas, IMAGE_DURATION, Item, ItemKind, MAX_GAIN, MAX_SPEED, MIN_SPEED, Marker,
     Project, Rgba, Track, TrackKind, default_duration, max_duration, track_kind_for,
+};
+pub use text::{
+    DEFAULT_FONT, MAX_TEXT_SIZE, MIN_TEXT_SIZE, Outline, Shadow, TextAlign, TextAnimation,
+    TextBehaviour, TextBox, TextMotion, TextSpec, TextStyle,
 };
 pub use time::{FrameRate, TICKS_PER_SECOND, Time};
 pub use visual::{
