@@ -16,6 +16,14 @@ Get-ChildItem "$FfmpegDir\bin\*.dll" | Copy-Item -Destination $Out
 $lic = New-Item -ItemType Directory -Force -Path "$Out\licenses"
 Copy-Item "$root\LICENSE-MIT", "$root\LICENSE-APACHE" $lic
 Copy-Item "$root\assets\fonts\ui\Inter-OFL.txt" $lic
+# Bundled fonts (OFL) and stickers (CC BY-SA): their licences and the
+# per-file attribution table.
+$fonts = New-Item -ItemType Directory -Force -Path "$lic\fonts"
+Get-ChildItem "$root\assets\fonts\title\*\OFL.txt" | ForEach-Object {
+    Copy-Item $_.FullName "$fonts\$($_.Directory.Name)-OFL.txt"
+}
+Copy-Item "$root\assets\stickers\openmoji\LICENSE.txt" "$lic\OpenMoji-CC-BY-SA-4.0.txt"
+Copy-Item "$root\assets\ATTRIBUTION.md" "$lic\ATTRIBUTION.md"
 if (Test-Path "$root\THIRD_PARTY_LICENSES.html") { Copy-Item "$root\THIRD_PARTY_LICENSES.html" $lic }
 $ff = New-Item -ItemType Directory -Force -Path "$lic\FFmpeg"
 # Licence text and exact configure line, written by scripts/ffmpeg.

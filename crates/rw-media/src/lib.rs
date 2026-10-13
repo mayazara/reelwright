@@ -3,6 +3,7 @@
 //!
 //! Nothing outside this crate touches FFmpeg, so the binding can be swapped.
 
+pub mod capture;
 pub mod decode;
 pub mod encode;
 mod ffmpeg;
@@ -11,6 +12,7 @@ pub mod fixtures;
 pub mod peaks;
 mod rgba;
 
+pub use capture::{CapturedFrame, DeviceReader, DeviceSpec};
 pub use decode::{AudioReader, VideoFrame, VideoReader};
 pub use encode::{
     AudioSettings, AudioWriter, Mp4Writer, VideoCodec, VideoSettings, working_encoders,

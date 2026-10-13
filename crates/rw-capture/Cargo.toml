@@ -8,6 +8,15 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+rw-model.workspace = true
+rw-media.workspace = true
+cpal.workspace = true
+crossbeam-channel.workspace = true
+fs4.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

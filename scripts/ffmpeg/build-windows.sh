@@ -37,13 +37,14 @@ make distclean >/dev/null 2>&1 || true
   --enable-mediafoundation \
   --enable-d3d11va --enable-dxva2 \
   --enable-ffnvcodec --enable-nvenc --enable-nvdec \
-  --enable-amf --enable-libvpl
+  --enable-amf --enable-libvpl \
+  --enable-indev=gdigrab,dshow
 make -j"$(nproc)"
 make install
 assert_lgpl
 
 # Only Windows system DLLs and the FFmpeg DLLs themselves may be needed.
-allowed='^(kernel32|user32|gdi32|advapi32|ole32|oleaut32|shell32|ws2_32|bcrypt|secur32|ncrypt|crypt32|mfplat|mf|mfuuid|propsys|d3d11|dxgi|dxva2|evr|strmiids|psapi|shlwapi|msvcrt|api-ms-win-[a-z0-9-]+|ucrtbase|ntdll|avcodec-[0-9]+|avformat-[0-9]+|avutil-[0-9]+|swscale-[0-9]+|swresample-[0-9]+)\.dll$'
+allowed='^(kernel32|user32|gdi32|advapi32|ole32|oleaut32|shell32|ws2_32|bcrypt|secur32|ncrypt|crypt32|mfplat|mf|mfuuid|propsys|d3d11|dxgi|dxva2|evr|strmiids|psapi|shlwapi|msvcrt|api-ms-win-[a-z0-9-]+|ucrtbase|ntdll|avcodec-[0-9]+|avformat-[0-9]+|avdevice-[0-9]+|avutil-[0-9]+|swscale-[0-9]+|swresample-[0-9]+)\.dll$'
 bad=0
 for dll in "${PREFIX}"/bin/*.dll; do
   while read -r dep; do

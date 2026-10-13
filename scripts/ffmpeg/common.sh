@@ -36,7 +36,10 @@ COMMON_FLAGS=(
   --disable-debug
   --disable-network
   --disable-autodetect
-  --disable-avdevice
+  # Capture devices for recording; each OS script enables its own.
+  --enable-avdevice
+  --disable-indevs
+  --disable-outdevs
   --disable-avfilter
   --enable-pic
   --enable-zlib

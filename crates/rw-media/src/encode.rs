@@ -176,6 +176,10 @@ pub struct Mp4Writer {
     audio: Option<AudioTrack>,
     packet: ff::Packet,
     encoder_name: String,
+    /// Converts captured frames of one format and size to the encoder's.
+    source_scaler: Option<((Pixel, u32, u32), scaling::Context)>,
+    /// Frame number of the last frame written.
+    last_index: i64,
 }
 
 struct AudioTrack {
@@ -325,6 +329,13 @@ fn partial_path(path: &Path) -> PathBuf {
     PathBuf::from(p)
 }
 
+// SAFETY: FFmpeg's muxer, encoder and scaler contexts have no thread
+// affinity; they only require one user at a time, which `&mut self` on
+// every method guarantees. The raw pointers inside the wrappers are what
+// make the type `!Send` by default. A recording creates the writer on one
+// thread and writes on another.
+unsafe impl Send for Mp4Writer {}
+
 impl std::fmt::Debug for Mp4Writer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Mp4Writer")
@@ -391,11 +402,35 @@ impl Mp4Writer {
         video: &VideoSettings,
         audio: Option<&AudioSettings>,
     ) -> Result<Self, MediaError> {
+        Self::open(path, video, audio, false)
+    }
+
+    /// Creates `path` as fragmented MP4 written in place: if the app stops
+    /// unexpectedly, everything up to the last fragment (about a second)
+    /// still plays. For recordings.
+    pub fn create_fragmented(
+        path: &Path,
+        video: &VideoSettings,
+        audio: Option<&AudioSettings>,
+    ) -> Result<Self, MediaError> {
+        Self::open(path, video, audio, true)
+    }
+
+    fn open(
+        path: &Path,
+        video: &VideoSettings,
+        audio: Option<&AudioSettings>,
+        fragmented: bool,
+    ) -> Result<Self, MediaError> {
         crate::ffmpeg::Ffmpeg::new();
         if !video.width.is_multiple_of(2) || !video.height.is_multiple_of(2) {
             return Err(MediaError::Encode("frame size must be even".into()));
         }
-        let partial = partial_path(path);
+        let partial = if fragmented {
+            path.to_path_buf()
+        } else {
+            partial_path(path)
+        };
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -455,7 +490,14 @@ impl Mp4Writer {
             }
         };
 
-        octx.write_header().map_err(encode_err)?;
+        if fragmented {
+            let mut opts = ff::Dictionary::new();
+            opts.set("movflags", "frag_keyframe+empty_moov+default_base_moof");
+            opts.set("frag_duration", "1000000");
+            octx.write_header_with(opts).map_err(encode_err)?;
+        } else {
+            octx.write_header().map_err(encode_err)?;
+        }
         let scaler = scaling::Context::get(
             Pixel::RGBA,
             video.width,
@@ -484,9 +526,48 @@ impl Mp4Writer {
             audio,
             packet: ff::Packet::empty(),
             encoder_name,
+            source_scaler: None,
+            last_index: -1,
         };
         w.set_output_colorspace();
         Ok(w)
+    }
+
+    /// Appends a captured frame (any pixel format and size; scaled to the
+    /// output) as frame number `index`. Indices must increase; a frame for
+    /// an index already written is skipped, and gaps just hold the previous
+    /// picture longer. Returns whether it was written.
+    pub fn write_frame(
+        &mut self,
+        captured: &crate::CapturedFrame,
+        index: i64,
+    ) -> Result<bool, MediaError> {
+        let frame = &captured.frame;
+        if index <= self.last_index {
+            return Ok(false);
+        }
+        let key = (frame.format(), frame.width(), frame.height());
+        if self.source_scaler.as_ref().is_none_or(|(k, _)| *k != key) {
+            let ctx = scaling::Context::get(
+                key.0,
+                key.1,
+                key.2,
+                self.yuv.format(),
+                self.yuv.width(),
+                self.yuv.height(),
+                scaling::Flags::BILINEAR,
+            )
+            .map_err(decode_err)?;
+            self.source_scaler = Some((key, ctx));
+        }
+        let (_, scaler) = self.source_scaler.as_mut().expect("set above");
+        scaler.run(frame, &mut self.yuv).map_err(decode_err)?;
+        self.yuv.set_pts(Some(index));
+        self.last_index = index;
+        self.frames += 1;
+        self.video.send_frame(&self.yuv).map_err(encode_err)?;
+        self.drain_video()?;
+        Ok(true)
     }
 
     /// Converts with the BT.709 matrix into limited-range YUV.
@@ -536,7 +617,9 @@ impl Mp4Writer {
                 .copy_from_slice(&image.pixels[y * row..(y + 1) * row]);
         }
         self.scaler.run(&rgba, &mut self.yuv).map_err(decode_err)?;
-        self.yuv.set_pts(Some(self.frames));
+        let index = self.last_index + 1;
+        self.yuv.set_pts(Some(index));
+        self.last_index = index;
         self.frames += 1;
         self.video.send_frame(&self.yuv).map_err(encode_err)?;
         self.drain_video()
@@ -599,11 +682,14 @@ impl Mp4Writer {
         drop(audio);
         drop(video);
         drop(octx);
-        std::fs::rename(&partial, &path)?;
+        if partial != path {
+            std::fs::rename(&partial, &path)?;
+        }
         Ok(path)
     }
 
-    /// Stops writing and deletes the partial file.
+    /// Stops writing and deletes the partial file (or, for a fragmented
+    /// file, the file itself).
     pub fn abort(self) {
         let partial = self.partial.clone();
         drop(self);
@@ -620,6 +706,9 @@ pub struct AudioWriter {
     packet: ff::Packet,
 }
 
+// SAFETY: as for `Mp4Writer`.
+unsafe impl Send for AudioWriter {}
+
 impl std::fmt::Debug for AudioWriter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AudioWriter")
@@ -632,16 +721,47 @@ impl AudioWriter {
     /// Creates an MP3 file at `path` (written to a temporary name and
     /// renamed by [`Self::finish`]).
     pub fn create_mp3(path: &Path, bit_rate: usize) -> Result<Self, MediaError> {
+        Self::open(path, "mp3", "libmp3lame", bit_rate, false)
+    }
+
+    /// Creates an AAC sound file (`.m4a`) at `path`, fragmented and written
+    /// in place so a crash keeps what was recorded. For recordings.
+    pub fn create_m4a_fragmented(path: &Path, bit_rate: usize) -> Result<Self, MediaError> {
+        Self::open(path, "ipod", "aac", bit_rate, true)
+    }
+
+    fn open(
+        path: &Path,
+        container: &str,
+        encoder: &str,
+        bit_rate: usize,
+        fragmented: bool,
+    ) -> Result<Self, MediaError> {
         crate::ffmpeg::Ffmpeg::new();
-        let partial = partial_path(path);
+        let partial = if fragmented {
+            path.to_path_buf()
+        } else {
+            partial_path(path)
+        };
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let mut octx = ff::format::output_as(&partial, "mp3").map_err(encode_err)?;
-        let codec = ff::encoder::find_by_name("libmp3lame")
-            .ok_or_else(|| MediaError::Encode("MP3 encoder not available".into()))?;
-        let track = AudioTrack::open(&mut octx, codec, bit_rate, false)?;
-        octx.write_header().map_err(encode_err)?;
+        let mut octx = ff::format::output_as(&partial, container).map_err(encode_err)?;
+        let global_header = octx
+            .format()
+            .flags()
+            .contains(ff::format::Flags::GLOBAL_HEADER);
+        let codec = ff::encoder::find_by_name(encoder)
+            .ok_or_else(|| MediaError::Encode(format!("{encoder} encoder not available")))?;
+        let track = AudioTrack::open(&mut octx, codec, bit_rate, global_header)?;
+        if fragmented {
+            let mut opts = ff::Dictionary::new();
+            opts.set("movflags", "frag_keyframe+empty_moov+default_base_moof");
+            opts.set("frag_duration", "1000000");
+            octx.write_header_with(opts).map_err(encode_err)?;
+        } else {
+            octx.write_header().map_err(encode_err)?;
+        }
         Ok(AudioWriter {
             octx,
             path: path.to_path_buf(),
@@ -669,7 +789,9 @@ impl AudioWriter {
         } = self;
         drop(track);
         drop(octx);
-        std::fs::rename(&partial, &path)?;
+        if partial != path {
+            std::fs::rename(&partial, &path)?;
+        }
         Ok(path)
     }
 

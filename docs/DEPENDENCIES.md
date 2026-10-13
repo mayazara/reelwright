@@ -33,6 +33,7 @@ Every third-party crate used directly by a workspace member, pinned with `=x.y.z
 | unicode-script | 0.5.8 | MIT OR Apache-2.0 | rw-text | Script ids for per-script font fallback | M5 |
 | gif | 0.14.2 | MIT OR Apache-2.0 | rw-engine | GIF export (per-frame NeuQuant palettes via its `color_quant` dependency, MIT); FFmpeg's palette filters aren't in the trimmed build | M5 |
 | resvg | 0.48.1 | Apache-2.0 OR MIT | rw-assets | SVG sticker rendering; its `tiny-skia` (BSD-3-Clause) draws shapes. Default features off (no text or embedded raster images) | M6 |
+| fs4 | 1.1.0 | MIT OR Apache-2.0 | rw-capture | Free disk space while recording | M7 |
 | cpal | 0.18.2 | Apache-2.0 | rw-audio | Sound card output (ALSA/PulseAudio, CoreAudio, WASAPI); needs `libasound2-dev` to build on Linux | M2 |
 | ringbuf | 0.4.8 | MIT OR Apache-2.0 | rw-audio, rw-engine | Lock-free audio ring between mixer and output | M2 |
 
