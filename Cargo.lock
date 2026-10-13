@@ -3085,7 +3085,7 @@ dependencies = [
 
 [[package]]
 name = "reelwright"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "directories",
@@ -3281,11 +3281,11 @@ dependencies = [
 
 [[package]]
 name = "rw-ai"
-version = "0.2.0"
+version = "0.3.0"
 
 [[package]]
 name = "rw-assets"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "image",
  "resvg",
@@ -3298,7 +3298,7 @@ dependencies = [
 
 [[package]]
 name = "rw-audio"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cpal",
  "ringbuf",
@@ -3309,7 +3309,7 @@ dependencies = [
 
 [[package]]
 name = "rw-cache"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rw-model",
  "tempfile",
@@ -3317,7 +3317,7 @@ dependencies = [
 
 [[package]]
 name = "rw-capture"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cpal",
  "crossbeam-channel",
@@ -3330,7 +3330,7 @@ dependencies = [
 
 [[package]]
 name = "rw-edit"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "proptest",
  "rw-model",
@@ -3340,7 +3340,7 @@ dependencies = [
 
 [[package]]
 name = "rw-engine"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "crossbeam-channel",
  "gif",
@@ -3362,7 +3362,7 @@ dependencies = [
 
 [[package]]
 name = "rw-fx"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rw-model",
  "thiserror 2.0.21",
@@ -3370,7 +3370,7 @@ dependencies = [
 
 [[package]]
 name = "rw-media"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ffmpeg-next",
  "image",
@@ -3382,7 +3382,7 @@ dependencies = [
 
 [[package]]
 name = "rw-model"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "proptest",
@@ -3395,7 +3395,7 @@ dependencies = [
 
 [[package]]
 name = "rw-render"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bytemuck",
  "pollster 1.0.1",
@@ -3409,7 +3409,7 @@ dependencies = [
 
 [[package]]
 name = "rw-text"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cosmic-text",
  "image",
@@ -3421,7 +3421,7 @@ dependencies = [
 
 [[package]]
 name = "rw-ui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "crossbeam-channel",
  "eframe",

@@ -4,6 +4,7 @@
 - **Look:** transform and crop, colour adjustments, 24 filters, blend modes, 16 effects including green screen, and 20 transitions.
 - **Text:** titles, lower thirds, quote cards, countdowns and rolling credits, with 33 bundled fonts and animated entrances (Arabic, Hindi, Chinese/Japanese/Korean and emoji supported).
 - **Graphics:** 450+ emoji and stickers (OpenMoji), shapes and arrows, audio visualisers, sound effects, and a brand kit for your colours, fonts and logos.
+- **Recording:** record your screen, webcam, microphone and computer sound, with a 3-2-1 countdown, pause and retake. Recordings are saved with the project and land on the timeline, with the webcam as a corner overlay.
 - **Export:** MP4 (H.264, HEVC, AV1 where your graphics card supports them), WebM, GIF and MP3, from 480p to 4K, using your computer's hardware encoder when it has one.
 
 ## Download for Windows
