@@ -58,6 +58,8 @@ pub struct Session {
     pub revision: u64,
     /// Pixel size the preview panel last asked for.
     pub(crate) preview_size: (u32, u32),
+    /// Share of the panel's pixels the preview is drawn at (settings).
+    pub preview_scale: f32,
     /// A look change being dragged (slider, handle) but not yet committed;
     /// the preview shows it, the project and history don't have it yet.
     pub preview_patch: Option<(Vec<ItemId>, rw_edit::timeline::LookPatch)>,
@@ -99,6 +101,7 @@ impl Session {
             strips: StripCache::default(),
             revision: 0,
             preview_size: (project.canvas.width / 2, project.canvas.height / 2),
+            preview_scale: 1.0,
             preview_patch: None,
             preview_fill: None,
             preview_text: None,

@@ -103,7 +103,7 @@ fn preview_panel(
     ui.painter().rect_filled(area, 0.0, tokens.preview_backdrop);
     let canvas = s.project.canvas;
     let size = preview::target_size(
-        area.size() - egui::vec2(16.0, 16.0),
+        (area.size() - egui::vec2(16.0, 16.0)) * s.preview_scale,
         ui.ctx().pixels_per_point(),
         canvas,
     );

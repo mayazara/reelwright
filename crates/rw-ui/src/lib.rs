@@ -16,9 +16,11 @@ pub mod layout;
 pub mod media_bin;
 pub mod preview;
 pub mod record;
+pub mod recovery;
 mod reveal;
 pub mod session;
 pub mod settings;
+pub mod settings_window;
 pub mod text_library;
 pub mod textures;
 pub mod theme;
@@ -33,6 +35,7 @@ use home::{HomeAction, HomeState};
 use media_bin::{BinAction, BinState};
 use preview::UiGpu;
 use rw_audio::output::{NullFactory, OutputFactory};
+use rw_cache::ProjectCache;
 use rw_edit::commands::{RemoveMedia, RenameMedia, RenameProject, SetCanvas};
 use rw_engine::MediaJobs;
 use rw_engine::export::{ExportReport, ExportSettings};
@@ -102,6 +105,13 @@ pub struct EditorUi {
     full_screen_applied: bool,
     /// The keyboard shortcut list is open.
     pub cheat_sheet: bool,
+    /// Notes which project is open, for recovery after a crash.
+    recovery: recovery::Recovery,
+    /// The Settings window, while open.
+    pub settings_window: Option<settings_window::SettingsWindow>,
+    /// Recordings in the open project's folder that aren't in it (left by
+    /// a crash), offered for adding.
+    pub stray_recordings: Vec<PathBuf>,
 }
 
 /// An export running on a background thread.
@@ -141,13 +151,21 @@ impl EditorUi {
             Arc::new(Ffmpeg::new()),
             Arc::new(move || waker_ctx.request_repaint()),
         );
+        let settings_dir = config
+            .settings_file
+            .parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
+        let (recovery, unclean) = recovery::Recovery::start(&settings_dir);
         let mut ui = EditorUi {
             theme: settings.theme.into(),
             theme_applied: None,
             library: Library::new(&config.projects_dir),
             config,
             settings,
-            home: HomeState::default(),
+            home: HomeState {
+                unclean,
+                ..HomeState::default()
+            },
             home_stale: true,
             session: None,
             bin: BinState::default(),
@@ -163,6 +181,9 @@ impl EditorUi {
             full_screen: false,
             full_screen_applied: false,
             cheat_sheet: false,
+            recovery,
+            settings_window: None,
+            stray_recordings: Vec::new(),
         };
         ui.reload_brand();
         ui
@@ -222,6 +243,11 @@ impl EditorUi {
         match Session::open(dir, self.audio.clone(), self.ui_gpu.clone()) {
             Ok(mut s) => {
                 s.prepare_all(&self.jobs);
+                s.preview_scale = self.settings.preview_quality.scale();
+                let known: Vec<PathBuf> = s.project.media.iter().map(|m| m.path.clone()).collect();
+                self.stray_recordings = recovery::stray_recordings(dir, &known);
+                self.recovery.set_project(Some(dir));
+                self.home.unclean = None;
                 self.settings.touch_recent(dir);
                 self.save_settings();
                 self.session = Some(s);
@@ -253,6 +279,8 @@ impl EditorUi {
         self.textures.clear();
         self.editing_name = None;
         self.home_stale = true;
+        self.stray_recordings.clear();
+        self.recovery.set_project(None);
     }
 
     /// Imports files and folders (folders are scanned for media).
@@ -314,6 +342,153 @@ impl EditorUi {
                 self.settings.theme = self.theme.into();
                 self.save_settings();
             }
+            HomeAction::OpenSettings => self.open_settings(),
+            HomeAction::RevealReport(p) => {
+                if let Err(e) = reveal::reveal(&p) {
+                    self.home.error = Some(format!("Couldn't show the report: {e}"));
+                }
+            }
+        }
+    }
+
+    fn settings_dir(&self) -> PathBuf {
+        self.config
+            .settings_file
+            .parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
+    }
+
+    /// Project folders whose caches the Settings window may clear: every
+    /// project in the projects folder except the open one.
+    fn closed_project_dirs(&self) -> Vec<PathBuf> {
+        let open = self.session.as_ref().map(|s| s.dir.clone());
+        std::fs::read_dir(&self.config.projects_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && Some(p) != open.as_ref())
+            .collect()
+    }
+
+    pub fn open_settings(&mut self) {
+        let cache_bytes = self
+            .closed_project_dirs()
+            .iter()
+            .map(|d| settings_window::folder_size(ProjectCache::for_project(d).root()))
+            .sum();
+        self.settings_window = Some(settings_window::SettingsWindow { cache_bytes });
+    }
+
+    /// The app's settings (for tests).
+    pub fn settings(&self) -> &Settings {
+        &self.settings
+    }
+
+    fn handle_settings_action(&mut self, action: settings_window::SettingsAction) {
+        use settings_window::SettingsAction as A;
+        match action {
+            A::Theme(t) => {
+                self.theme = t;
+                self.settings.theme = t.into();
+            }
+            A::PreviewQuality(q) => {
+                self.settings.preview_quality = q;
+                if let Some(s) = self.session.as_mut() {
+                    s.preview_scale = q.scale();
+                }
+            }
+            A::ChooseExportFolder => {
+                if let Some(dir) = rfd::FileDialog::new()
+                    .set_title("Export folder")
+                    .pick_folder()
+                {
+                    self.settings.export_dir = Some(dir);
+                }
+            }
+            A::ResetExportFolder => self.settings.export_dir = None,
+            A::ClearCache => {
+                for d in self.closed_project_dirs() {
+                    if let Err(e) = ProjectCache::for_project(&d).clear() {
+                        tracing::warn!(error = %e, dir = %d.display(), "could not clear cache");
+                    }
+                }
+                self.open_settings();
+                self.home_stale = true;
+            }
+            A::Reveal(p) => {
+                if let Err(e) = reveal::reveal(&p) {
+                    tracing::warn!(error = %e, "could not show folder");
+                }
+            }
+        }
+        self.save_settings();
+    }
+
+    fn show_settings(&mut self, ctx: &egui::Context, tokens: Tokens) {
+        let Some(state) = self.settings_window.as_ref() else {
+            return;
+        };
+        let mut open = true;
+        let reports = self.settings_dir().join(recovery::REPORTS);
+        let open_project = self.session.as_ref().map(|s| s.dir.clone());
+        let action = settings_window::show(
+            ctx,
+            &mut open,
+            state,
+            &self.settings,
+            self.theme,
+            settings_window::Paths {
+                projects: &self.config.projects_dir,
+                reports: &reports,
+                open_project: open_project.as_deref(),
+            },
+            tokens,
+        );
+        if !open {
+            self.settings_window = None;
+        }
+        if let Some(a) = action {
+            self.handle_settings_action(a);
+        }
+    }
+
+    pub const ADD_STRAY_LABEL: &'static str = "Add them";
+
+    /// Offers recordings left outside the project (after a crash).
+    fn show_stray_recordings(&mut self, ctx: &egui::Context, tokens: Tokens) {
+        if self.stray_recordings.is_empty() {
+            return;
+        }
+        let mut add = false;
+        let mut dismiss = false;
+        egui::Window::new("Recordings found")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.label(format!(
+                    "{} recording file(s) in this project's Recordings folder aren't in the project, \
+                     perhaps because the app closed while recording.",
+                    self.stray_recordings.len()
+                ));
+                for p in self.stray_recordings.iter().take(6) {
+                    ui.label(
+                        RichText::new(p.file_name().unwrap_or_default().to_string_lossy())
+                            .small()
+                            .color(tokens.text_muted),
+                    );
+                }
+                ui.horizontal(|ui| {
+                    add = ui.button(Self::ADD_STRAY_LABEL).clicked();
+                    dismiss = ui.button("Not now").clicked();
+                });
+            });
+        if add {
+            let files = std::mem::take(&mut self.stray_recordings);
+            self.import_paths(files);
+        } else if dismiss {
+            self.stray_recordings.clear();
         }
     }
 
@@ -942,6 +1117,7 @@ impl EditorUi {
                 action = home::show(ui, &mut self.home, &mut self.textures, tokens);
             });
             home::about(&ctx, &mut self.home.about, tokens);
+            self.show_settings(&ctx, tokens);
             if let Some(a) = action {
                 self.handle_home_action(a);
             }
@@ -953,6 +1129,8 @@ impl EditorUi {
         self.show_export_dialog(&ctx, tokens);
         self.tick_recording(&ctx, tokens);
         cheat_sheet::show(&ctx, &mut self.cheat_sheet, tokens);
+        self.show_settings(&ctx, tokens);
+        self.show_stray_recordings(&ctx, tokens);
         if self.full_screen {
             let session = self.session.as_mut().expect("checked above");
             session.tick_playback();
@@ -1002,9 +1180,13 @@ impl EditorUi {
 
     fn top_bar(&mut self, ui: &mut egui::Ui, tokens: Tokens, go_home: &mut bool) {
         let mut start_export = false;
-        self.top_bar_inner(ui, tokens, go_home, &mut start_export);
+        let mut open_settings = false;
+        self.top_bar_inner(ui, tokens, go_home, &mut start_export, &mut open_settings);
         if start_export {
             self.apply(EditorAction::Export);
+        }
+        if open_settings {
+            self.open_settings();
         }
     }
 
@@ -1014,6 +1196,7 @@ impl EditorUi {
         tokens: Tokens,
         go_home: &mut bool,
         start_export: &mut bool,
+        open_settings: &mut bool,
     ) {
         let Some(s) = self.session.as_mut() else {
             return;
@@ -1100,7 +1283,7 @@ impl EditorUi {
                                 RichText::new(EXPORT_LABEL).color(tokens.on_accent),
                             )
                             .fill(tokens.accent);
-                            let keys = ui.ctx().format_shortcut(&EXPORT_SHORTCUT);
+                            let keys = cheat_sheet::keys_text(ui.ctx(), &EXPORT_SHORTCUT);
                             if ui
                                 .add(export)
                                 .on_hover_text(format!("Export video ({keys})"))
@@ -1123,7 +1306,10 @@ impl EditorUi {
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let keys = ui.ctx().format_shortcut(&CHEAT_SHEET);
+                        if ui.button(home::SETTINGS_LABEL).clicked() {
+                            *open_settings = true;
+                        }
+                        let keys = cheat_sheet::keys_text(ui.ctx(), &CHEAT_SHEET);
                         if ui
                             .button(cheat_sheet::OPEN_LABEL)
                             .on_hover_text(format!("{} ({keys})", cheat_sheet::TITLE))
@@ -1184,6 +1370,7 @@ impl EditorUi {
         self.cancel_export();
         self.close_project();
         self.save_settings();
+        self.recovery.finish();
     }
 }
 

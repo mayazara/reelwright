@@ -132,6 +132,11 @@ fn run() -> anyhow::Result<()> {
 
     let config = config()?;
     tracing::info!(projects = %config.projects_dir.display(), "using projects folder");
+    // A crash leaves a report beside the settings; the next start offers
+    // to reopen the project.
+    if let Some(dir) = config.settings_file.parent() {
+        rw_ui::recovery::install_panic_hook(dir.to_path_buf(), app::VERSION);
+    }
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title(app::NAME)
         .with_app_id(app::ID)

@@ -17,6 +17,43 @@ pub struct Settings {
     pub recent: Vec<PathBuf>,
     /// Folder of the last export.
     pub export_dir: Option<PathBuf>,
+    pub preview_quality: PreviewQuality,
+}
+
+/// How sharp the preview is drawn. Lower plays more smoothly on slow
+/// computers; exports are always at full quality.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PreviewQuality {
+    #[default]
+    Full,
+    Half,
+    Quarter,
+}
+
+impl PreviewQuality {
+    pub const ALL: [PreviewQuality; 3] = [
+        PreviewQuality::Full,
+        PreviewQuality::Half,
+        PreviewQuality::Quarter,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PreviewQuality::Full => "Full",
+            PreviewQuality::Half => "Half",
+            PreviewQuality::Quarter => "Quarter",
+        }
+    }
+
+    /// Share of the panel's pixels the preview is drawn at.
+    pub fn scale(self) -> f32 {
+        match self {
+            PreviewQuality::Full => 1.0,
+            PreviewQuality::Half => 0.5,
+            PreviewQuality::Quarter => 0.25,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

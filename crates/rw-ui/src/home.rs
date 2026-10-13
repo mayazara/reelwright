@@ -29,13 +29,23 @@ pub const CUSTOM_LABEL: &str = "Custom";
 /// What the user asked for on the home screen this frame.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HomeAction {
-    Create { name: String, canvas: Canvas },
+    Create {
+        name: String,
+        canvas: Canvas,
+    },
     Open(PathBuf),
     OpenOther,
     Duplicate(PathBuf),
     Delete(PathBuf),
     ToggleTheme,
+    OpenSettings,
+    /// Show a crash report in the file manager.
+    RevealReport(PathBuf),
 }
+
+pub const SETTINGS_LABEL: &str = "Settings";
+pub const REOPEN_LABEL: &str = "Open it again";
+pub const SHOW_REPORT_LABEL: &str = "Show crash report";
 
 pub const ABOUT_LABEL: &str = "About";
 
@@ -117,6 +127,8 @@ pub struct HomeState {
     pub new_dialog: Option<NewProjectDialog>,
     pub confirm_delete: Option<(PathBuf, String)>,
     pub error: Option<String>,
+    /// The last run didn't close properly.
+    pub unclean: Option<crate::recovery::Unclean>,
 }
 
 /// Draws a rectangle with the canvas's aspect ratio inside `size`.
@@ -159,6 +171,9 @@ pub fn show(
                         if ui.button(ABOUT_LABEL).clicked() {
                             state.about = true;
                         }
+                        if ui.button(SETTINGS_LABEL).clicked() {
+                            action = Some(HomeAction::OpenSettings);
+                        }
                     });
                 });
                 ui.add_space(20.0);
@@ -180,6 +195,44 @@ pub fn show(
                         action = Some(HomeAction::OpenOther);
                     }
                 });
+                if let Some(u) = state.unclean.clone() {
+                    ui.add_space(16.0);
+                    egui::Frame::new()
+                        .fill(tokens.surface_raised)
+                        .corner_radius(CornerRadius::same(tokens.radius))
+                        .inner_margin(egui::Margin::same(12))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                            ui.label(
+                                RichText::new(format!("{} didn't close properly last time.", app::NAME))
+                                    .strong()
+                                    .color(tokens.text),
+                            );
+                            if let Some(p) = &u.project {
+                                let name = p.file_name().unwrap_or_default().to_string_lossy();
+                                ui.label(format!(
+                                    "\u{201c}{name}\u{201d} was saved automatically a few seconds before."
+                                ));
+                            }
+                            ui.horizontal(|ui| {
+                                if let Some(p) = &u.project
+                                    && ui.button(REOPEN_LABEL).clicked()
+                                {
+                                    action = Some(HomeAction::Open(p.clone()));
+                                }
+                                if let Some(r) = &u.report
+                                    && ui.button(SHOW_REPORT_LABEL).clicked()
+                                {
+                                    action = Some(HomeAction::RevealReport(r.clone()));
+                                }
+                                if ui.button("Dismiss").clicked() {
+                                    state.unclean = None;
+                                }
+                            });
+                            });
+                        });
+                }
                 if let Some(err) = &state.error {
                     ui.add_space(12.0);
                     ui.label(RichText::new(err).color(tokens.danger));

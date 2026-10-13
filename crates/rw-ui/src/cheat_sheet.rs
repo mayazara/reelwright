@@ -2,10 +2,65 @@
 //! actually handles, with key names as this computer's keyboard shows them.
 
 use crate::theme::Tokens;
-use eframe::egui::{self, KeyboardShortcut, RichText};
+use eframe::egui::{self, Key, KeyboardShortcut, RichText};
 
 pub const TITLE: &str = "Keyboard shortcuts";
 pub const OPEN_LABEL: &str = "Shortcuts";
+
+/// How `keys` are written on this kind of keyboard: symbols on a Mac
+/// (⌘⇧Z), names elsewhere (Ctrl+Shift+Z); keys as printed on them.
+pub fn format(keys: &KeyboardShortcut, mac: bool) -> String {
+    let key = match keys.logical_key {
+        Key::Questionmark => "?",
+        Key::Equals => "=",
+        Key::Plus => "+",
+        Key::Minus => "−",
+        Key::Escape => "Esc",
+        Key::ArrowLeft => "←",
+        Key::ArrowRight => "→",
+        Key::ArrowUp => "↑",
+        Key::ArrowDown => "↓",
+        Key::Backspace if mac => "⌫",
+        k => k.name(),
+    };
+    let m = keys.modifiers;
+    let mut parts: Vec<&str> = Vec::new();
+    if mac {
+        let mut s = String::new();
+        for (on, sym) in [
+            (m.ctrl && !m.command, "⌃"),
+            (m.alt, "⌥"),
+            (m.shift, "⇧"),
+            (m.command || m.mac_cmd, "⌘"),
+        ] {
+            if on {
+                s.push_str(sym);
+            }
+        }
+        return format!("{s}{key}");
+    }
+    if m.command || m.ctrl {
+        parts.push("Ctrl");
+    }
+    if m.alt {
+        parts.push("Alt");
+    }
+    if m.shift {
+        parts.push("Shift");
+    }
+    parts.push(key);
+    parts.join("+")
+}
+
+/// Whether this computer is a Mac (for key names).
+fn is_mac(ctx: &egui::Context) -> bool {
+    ctx.os() == egui::os::OperatingSystem::Mac
+}
+
+/// The keys of `shortcut` as this computer's keyboard shows them.
+pub fn keys_text(ctx: &egui::Context, shortcut: &KeyboardShortcut) -> String {
+    format(shortcut, is_mac(ctx))
+}
 
 /// Rows of the sheet: what it does, and the keys (alternatives joined),
 /// in the editor's order with repeated actions merged.
@@ -28,7 +83,7 @@ pub fn rows(ctx: &egui::Context) -> Vec<(&'static str, String)> {
     }
     rows.into_iter()
         .map(|(what, keys)| {
-            let text: Vec<String> = keys.iter().map(|k| ctx.format_shortcut(k)).collect();
+            let text: Vec<String> = keys.iter().map(|k| keys_text(ctx, k)).collect();
             (what, text.join("  or  "))
         })
         .collect()
@@ -60,6 +115,7 @@ pub fn show(ctx: &egui::Context, open: &mut bool, tokens: Tokens) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eframe::egui::Modifiers;
 
     #[test]
     fn every_plan_shortcut_is_listed() {
@@ -90,6 +146,30 @@ mod tests {
         ] {
             assert!(what.contains(&needed), "{needed} missing");
         }
+        // Keys as printed, per platform.
+        let cmd_shift = Modifiers::COMMAND.plus(Modifiers::SHIFT);
+        assert_eq!(
+            format(&KeyboardShortcut::new(cmd_shift, Key::Z), false),
+            "Ctrl+Shift+Z"
+        );
+        assert_eq!(
+            format(&KeyboardShortcut::new(cmd_shift, Key::Z), true),
+            "⇧⌘Z"
+        );
+        assert_eq!(
+            format(
+                &KeyboardShortcut::new(Modifiers::NONE, Key::Questionmark),
+                false
+            ),
+            "?"
+        );
+        assert_eq!(
+            format(
+                &KeyboardShortcut::new(Modifiers::COMMAND, Key::Equals),
+                false
+            ),
+            "Ctrl+="
+        );
         // Alternatives are merged into one row.
         let delete = rows.iter().find(|r| r.0 == "Delete").unwrap();
         assert!(delete.1.contains("  or  "), "{}", delete.1);
