@@ -310,8 +310,11 @@ pub fn test_tone(time: Arc<dyn TimeSource>, ppm: f64) -> AudioInput {
                 }
                 n += block as u64;
                 lvl.store(0.9f32.to_bits(), Ordering::Relaxed);
-                if tx.send(AudioChunk { samples, at }).is_err() {
-                    return;
+                // Like a sound card's callback, never wait for the reader:
+                // a full queue loses the chunk (and shutdown can't hang).
+                match tx.try_send(AudioChunk { samples, at }) {
+                    Err(crossbeam_channel::TrySendError::Disconnected(_)) => return,
+                    Ok(()) | Err(crossbeam_channel::TrySendError::Full(_)) => {}
                 }
             }
         })

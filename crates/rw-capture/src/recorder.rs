@@ -3,7 +3,7 @@
 
 use crate::clock::{RecClock, TimeSource};
 use crate::sources::{AudioInput, VideoSource};
-use crate::sync::{AudioFollower, CHANNELS, RATE, frame_index};
+use crate::sync::{AudioFollower, CHANNELS, frame_index};
 use crossbeam_channel::{Receiver, Sender};
 use rw_media::{AudioSettings, AudioWriter, Mp4Writer, VideoCodec, VideoSettings};
 use rw_model::FrameRate;
@@ -16,9 +16,10 @@ use std::time::Duration;
 /// Recording stops when the disk has less than this free.
 pub const MIN_FREE_BYTES: u64 = 500 * 1024 * 1024;
 
-/// Sound from an input that has said nothing for this long is filled with
-/// silence (system sound sends nothing while nothing plays).
-const QUIET_FILL: Duration = Duration::from_millis(200);
+/// When recording from more than one sound input, one that has said
+/// nothing for this long is filled with silence so the others can be mixed
+/// (computer sound sends nothing while nothing plays).
+const QUIET_FILL: Duration = Duration::from_millis(500);
 
 impl TimeSource for Arc<dyn TimeSource> {
     fn now(&self) -> Duration {
@@ -227,10 +228,10 @@ impl Recorder {
                                     .write_frame(frame, end - 1)
                                     .map_err(|e| e.to_string())?;
                             }
-                            // Sound mixed before the stop.
+                            // The rest of the sound: the mixer sends what it
+                            // still holds, then closes.
                             if let Some(rx) = &sound {
-                                std::thread::sleep(Duration::from_millis(100));
-                                for chunk in rx.try_iter() {
+                                for chunk in rx.iter() {
                                     writer.write_audio(&chunk).map_err(|e| e.to_string())?;
                                 }
                             }
@@ -254,13 +255,11 @@ impl Recorder {
                     .name("record-sound".into())
                     .spawn(move || {
                         let mut run = || -> Result<(), String> {
-                            loop {
-                                match rx.recv_timeout(Duration::from_millis(50)) {
-                                    Ok(chunk) => w.write(&chunk).map_err(|e| e.to_string())?,
-                                    Err(_) if stop.load(Ordering::Relaxed) => return Ok(()),
-                                    Err(_) => {}
-                                }
+                            // Until the mixer has sent everything and closed.
+                            for chunk in rx.iter() {
+                                w.write(&chunk).map_err(|e| e.to_string())?;
                             }
+                            Ok(())
                         };
                         if let Err(e) = run() {
                             set_problem(&problem, &stop, e);
@@ -366,7 +365,6 @@ fn mix(
 ) {
     let mut followers: Vec<AudioFollower> = inputs.iter().map(|_| AudioFollower::new()).collect();
     let mut buffers: Vec<Vec<f32>> = vec![Vec::new(); inputs.len()];
-    let mut sent = 0usize;
     loop {
         let stopping = stop.load(Ordering::Relaxed);
         let mut got = false;
@@ -381,13 +379,23 @@ fn mix(
         }
         // Inputs that have been quiet catch up with silence, so a silent
         // system-sound input doesn't hold back the microphone.
-        if let Some(now) = clock.at(clock.source().now()) {
+        if inputs.len() > 1
+            && let Some(now) = clock.at(clock.source().now())
+        {
             let behind = now.saturating_sub(QUIET_FILL);
             for (f, b) in followers.iter_mut().zip(buffers.iter_mut()) {
-                let target = (behind.as_secs_f64() * f64::from(RATE)) as i64;
-                if f.written() < target {
-                    b.extend(f.take(behind, &[]));
-                }
+                b.extend(f.fill_to(behind));
+            }
+        }
+        if stopping {
+            // The sound each follower still holds; inputs that ended
+            // sooner are padded with silence.
+            for (f, b) in followers.iter_mut().zip(buffers.iter_mut()) {
+                b.extend(f.flush());
+            }
+            let longest = buffers.iter().map(Vec::len).max().unwrap_or(0);
+            for b in buffers.iter_mut() {
+                b.resize(longest, 0.0);
             }
         }
         // Everything all inputs have reached can be mixed.
@@ -402,13 +410,11 @@ fn mix(
             for m in mixed.iter_mut() {
                 *m = m.clamp(-1.0, 1.0);
             }
-            sent += ready;
             if out.send(mixed).is_err() {
                 return;
             }
         }
         if stopping {
-            let _ = sent;
             return;
         }
         if !got {
