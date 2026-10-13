@@ -35,6 +35,10 @@ pub enum EditorAction {
     ZoomFit,
     /// Show only the preview, filling the screen (or go back).
     ToggleFullScreen,
+    /// Select the clip under the playhead on the top track; again, the
+    /// one on the next track down (keyboard selection).
+    SelectAtPlayhead,
+    ClearSelection,
     /// Drop media from the bin onto the timeline.
     InsertMedia {
         media: MediaId,

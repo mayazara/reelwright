@@ -102,7 +102,7 @@ fn record_tab_offers_devices_and_starts_a_countdown() {
     h.run_ok();
     h.get_by_label("Show the mouse pointer");
     // No microphone chosen: no meter, so nothing was opened.
-    assert!(h.query_by_label("Microphone").is_some());
+    assert!(h.query_all_by_label("Microphone").next().is_some());
 
     // The chosen pointer setting goes to the device.
     h.get_by_label("Show the mouse pointer").click();

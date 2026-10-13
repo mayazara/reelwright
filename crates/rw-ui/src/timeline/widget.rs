@@ -249,8 +249,7 @@ fn toolbar(
         let mut zoom = state.view.px_per_sec.ln();
         let slider = egui::Slider::new(&mut zoom, View::MIN_ZOOM.ln()..=View::MAX_ZOOM.ln())
             .show_value(false);
-        if ui
-            .add_sized([120.0, 18.0], slider)
+        if crate::layout::name(ui.add_sized([120.0, 18.0], slider), "Timeline zoom")
             .on_hover_text("Zoom")
             .changed()
         {
@@ -523,7 +522,10 @@ pub fn show(ui: &mut egui::Ui, state: &mut TimelineState, ctx: Ctx<'_>) -> Vec<E
                 let id = ui.make_persistent_id(("track-gain", track.id));
                 let current = crate::inspector::gain_to_db(gain);
                 let mut db: f32 = ui.data(|d| d.get_temp(id)).unwrap_or(current);
-                let r = ui.add(egui::Slider::new(&mut db, -60.0..=12.0).suffix(" dB"));
+                let r = crate::layout::name(
+                    ui.add(egui::Slider::new(&mut db, -60.0..=12.0).suffix(" dB")),
+                    "Track volume",
+                );
                 if r.changed() {
                     ui.data_mut(|d| d.insert_temp(id, db));
                 }

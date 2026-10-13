@@ -141,10 +141,13 @@ pub fn show(ui: &mut egui::Ui, state: &mut GraphicsState, tokens: Tokens) -> Opt
     );
     match state.section {
         Section::Stickers => {
-            ui.add(
-                egui::TextEdit::singleline(&mut state.search)
-                    .hint_text("Search stickers")
-                    .desired_width(f32::INFINITY),
+            crate::layout::name(
+                ui.add(
+                    egui::TextEdit::singleline(&mut state.search)
+                        .hint_text("Search stickers")
+                        .desired_width(f32::INFINITY),
+                ),
+                "Search stickers",
             );
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let query = state.search.trim();

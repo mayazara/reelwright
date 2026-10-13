@@ -105,6 +105,8 @@ pub struct EditorUi {
     full_screen_applied: bool,
     /// The keyboard shortcut list is open.
     pub cheat_sheet: bool,
+    /// A control had keyboard focus at the end of the last frame.
+    had_focus: bool,
     /// Notes which project is open, for recovery after a crash.
     recovery: recovery::Recovery,
     /// The Settings window, while open.
@@ -181,6 +183,7 @@ impl EditorUi {
             full_screen: false,
             full_screen_applied: false,
             cheat_sheet: false,
+            had_focus: false,
             recovery,
             settings_window: None,
             stray_recordings: Vec::new(),
@@ -897,6 +900,11 @@ impl EditorUi {
     }
 
     /// The open export dialog, for tests.
+    /// Closes the export dialog (an export in progress carries on).
+    pub fn close_export_dialog(&mut self) {
+        self.export_dialog = None;
+    }
+
     pub fn export_dialog(&self) -> Option<&export_dialog::ExportDialog> {
         self.export_dialog.as_ref()
     }
@@ -1086,12 +1094,19 @@ impl EditorUi {
         if ctx.input_mut(|i| i.consume_shortcut(&SAVE)) {
             s.save();
         }
-        for action in shortcuts(ctx) {
+        for action in shortcuts(ctx, self.had_focus) {
             self.apply(action);
         }
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        self.frame(ui);
+        // Esc takes focus away before the next frame's shortcuts run, so
+        // remember that a control had it (Esc then only leaves it).
+        self.had_focus = ui.ctx().memory(|m| m.focused().is_some());
+    }
+
+    fn frame(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         if self.theme_applied != Some(self.theme) {
             theme::apply(&ctx, self.theme);
@@ -1212,7 +1227,10 @@ impl EditorUi {
                     ui.separator();
                     match &mut self.editing_name {
                         Some(name) => {
-                            let r = ui.add(egui::TextEdit::singleline(name).desired_width(220.0));
+                            let r = crate::layout::name(
+                                ui.add(egui::TextEdit::singleline(name).desired_width(220.0)),
+                                "Project name",
+                            );
                             r.request_focus();
                             if r.lost_focus() {
                                 let new = name.trim().to_owned();
@@ -1241,19 +1259,23 @@ impl EditorUi {
                         |p| p.ratio_label().to_owned(),
                     );
                     let mut chosen = None;
-                    egui::ComboBox::from_id_salt("canvas-preset")
-                        .selected_text(current)
-                        .show_ui(ui, |ui| {
-                            for p in AspectPreset::ALL {
-                                let label = format!("{}  {}", p.ratio_label(), p.description());
-                                if ui
-                                    .selectable_label(canvas.preset() == Some(p), label)
-                                    .clicked()
-                                {
-                                    chosen = Some(p);
+                    {
+                        let combo = egui::ComboBox::from_id_salt("canvas-preset")
+                            .selected_text(current)
+                            .show_ui(ui, |ui| {
+                                for p in AspectPreset::ALL {
+                                    let label = format!("{}  {}", p.ratio_label(), p.description());
+                                    if ui
+                                        .selectable_label(canvas.preset() == Some(p), label)
+                                        .clicked()
+                                    {
+                                        chosen = Some(p);
+                                    }
                                 }
-                            }
-                        });
+                            });
+                        crate::layout::name(combo.response.clone(), "Canvas shape");
+                        combo
+                    };
                     if let Some(p) = chosen {
                         let mut next = Canvas::from_preset(p);
                         next.frame_rate = canvas.frame_rate;
@@ -1435,6 +1457,16 @@ pub fn shortcut_table() -> Vec<(KeyboardShortcut, EditorAction, &'static str)> {
             A::ToggleFullScreen,
             "Full-screen preview",
         ),
+        (
+            k(Modifiers::NONE, Key::Enter),
+            A::SelectAtPlayhead,
+            "Select the clip at the playhead (again: next track)",
+        ),
+        (
+            k(Modifiers::NONE, Key::Escape),
+            A::ClearSelection,
+            "Clear the selection",
+        ),
         (EXPORT_SHORTCUT, A::Export, "Export"),
     ]
 }
@@ -1462,12 +1494,19 @@ pub const EXPORT_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::C
 pub const CHEAT_SHEET: KeyboardShortcut = KeyboardShortcut::new(Modifiers::NONE, Key::Questionmark);
 
 /// Keyboard shortcuts pressed this frame, as actions.
-fn shortcuts(ctx: &egui::Context) -> Vec<EditorAction> {
+fn shortcuts(ctx: &egui::Context, had_focus: bool) -> Vec<EditorAction> {
     use EditorAction as A;
     let table = shortcut_table();
+    // A control reached with Tab takes plain keys (Space presses it);
+    // shortcuts with Ctrl/Cmd still work.
+    let focused = had_focus || ctx.memory(|m| m.focused().is_some());
     let mut out = Vec::new();
     ctx.input_mut(|i| {
         for (keys, action, _) in table {
+            let plain = !keys.modifiers.command && !keys.modifiers.ctrl;
+            if focused && plain {
+                continue;
+            }
             if i.consume_shortcut(&keys) {
                 out.push(action);
             }
@@ -1543,7 +1582,19 @@ mod shortcut_tests {
 
     /// The actions one key press produces.
     fn press(key: Key, modifiers: Modifiers) -> Vec<EditorAction> {
+        press_with(key, modifiers, false)
+    }
+
+    /// The same, optionally with a control focused (reached with Tab).
+    fn press_with(key: Key, modifiers: Modifiers, focus: bool) -> Vec<EditorAction> {
         let ctx = egui::Context::default();
+        if focus {
+            let mut done = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let r = ui.button("Somewhere");
+                r.request_focus();
+            });
+            done.textures_delta.clear();
+        }
         let input = egui::RawInput {
             events: vec![egui::Event::Key {
                 key,
@@ -1555,7 +1606,7 @@ mod shortcut_tests {
             ..Default::default()
         };
         let mut out = Vec::new();
-        let mut done = ctx.run_ui(input, |ui| out = shortcuts(ui.ctx()));
+        let mut done = ctx.run_ui(input, |ui| out = shortcuts(ui.ctx(), false));
         done.textures_delta.clear();
         out
     }
@@ -1579,5 +1630,20 @@ mod shortcut_tests {
         assert_eq!(press(Key::Z, Modifiers::SHIFT), [A::ZoomFit]);
         assert_eq!(press(Key::F, Modifiers::NONE), [A::ToggleFullScreen]);
         assert_eq!(press(Key::E, Modifiers::COMMAND), [A::Export]);
+        assert_eq!(press(Key::Enter, Modifiers::NONE), [A::SelectAtPlayhead]);
+        assert_eq!(press(Key::Escape, Modifiers::NONE), [A::ClearSelection]);
+    }
+
+    #[test]
+    fn a_focused_control_keeps_plain_keys() {
+        use EditorAction as A;
+        // Space presses the focused button instead of playing.
+        assert!(press_with(Key::Space, Modifiers::NONE, true).is_empty());
+        assert!(press_with(Key::Delete, Modifiers::NONE, true).is_empty());
+        assert_eq!(press_with(Key::E, Modifiers::COMMAND, true), [A::Export]);
+        assert_eq!(
+            press_with(Key::Space, Modifiers::NONE, false),
+            [A::PlayPause]
+        );
     }
 }

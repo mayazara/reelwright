@@ -398,7 +398,10 @@ fn new_project_modal(
         ui.add_space(12.0);
         ui.horizontal(|ui| {
             ui.label("Name");
-            ui.add(egui::TextEdit::singleline(&mut dialog.name).desired_width(400.0));
+            crate::layout::name(
+                ui.add(egui::TextEdit::singleline(&mut dialog.name).desired_width(400.0)),
+                "Project name",
+            );
         });
         ui.add_space(12.0);
         ui.label("Shape");
@@ -441,16 +444,22 @@ fn new_project_modal(
             ui.horizontal(|ui| {
                 let range = Canvas::MIN_SIDE..=Canvas::MAX_SIDE;
                 ui.label("Width");
-                ui.add(
-                    egui::DragValue::new(&mut dialog.custom.0)
-                        .range(range.clone())
-                        .suffix(" px"),
+                crate::layout::name(
+                    ui.add(
+                        egui::DragValue::new(&mut dialog.custom.0)
+                            .range(range.clone())
+                            .suffix(" px"),
+                    ),
+                    "Width",
                 );
                 ui.label("Height");
-                ui.add(
-                    egui::DragValue::new(&mut dialog.custom.1)
-                        .range(range)
-                        .suffix(" px"),
+                crate::layout::name(
+                    ui.add(
+                        egui::DragValue::new(&mut dialog.custom.1)
+                            .range(range)
+                            .suffix(" px"),
+                    ),
+                    "Height",
                 );
             });
         }

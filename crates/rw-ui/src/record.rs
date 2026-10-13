@@ -222,15 +222,19 @@ pub fn panel(ui: &mut egui::Ui, p: &mut RecordPanel, tokens: Tokens) -> bool {
                 .and_then(|i| d.screens.get(i))
                 .map_or("Don't record", |s| s.label.as_str())
                 .to_owned();
-            egui::ComboBox::from_id_salt("record-screen")
-                .selected_text(screen_name)
-                .width(220.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut p.screen, None, "Don't record");
-                    for (i, s) in d.screens.iter().enumerate() {
-                        ui.selectable_value(&mut p.screen, Some(i), &s.label);
-                    }
-                });
+            {
+                let combo = egui::ComboBox::from_id_salt("record-screen")
+                    .selected_text(screen_name)
+                    .width(220.0)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut p.screen, None, "Don't record");
+                        for (i, s) in d.screens.iter().enumerate() {
+                            ui.selectable_value(&mut p.screen, Some(i), &s.label);
+                        }
+                    });
+                crate::layout::name(combo.response.clone(), "Screen");
+                combo
+            };
             ui.end_row();
 
             ui.label("Camera");
@@ -239,26 +243,34 @@ pub fn panel(ui: &mut egui::Ui, p: &mut RecordPanel, tokens: Tokens) -> bool {
                 .and_then(|i| d.cameras.get(i))
                 .map_or("None", |s| s.label.as_str())
                 .to_owned();
-            egui::ComboBox::from_id_salt("record-camera")
-                .selected_text(camera_name)
-                .width(220.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut p.camera, None, "None");
-                    for (i, c) in d.cameras.iter().enumerate() {
-                        ui.selectable_value(&mut p.camera, Some(i), &c.label);
-                    }
-                });
+            {
+                let combo = egui::ComboBox::from_id_salt("record-camera")
+                    .selected_text(camera_name)
+                    .width(220.0)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut p.camera, None, "None");
+                        for (i, c) in d.cameras.iter().enumerate() {
+                            ui.selectable_value(&mut p.camera, Some(i), &c.label);
+                        }
+                    });
+                crate::layout::name(combo.response.clone(), "Camera");
+                combo
+            };
             ui.end_row();
             if p.camera.is_some() {
                 ui.label("Camera size");
-                egui::ComboBox::from_id_salt("record-camera-size")
-                    .selected_text(p.camera_size.label())
-                    .width(220.0)
-                    .show_ui(ui, |ui| {
-                        for size in CameraSize::ALL {
-                            ui.selectable_value(&mut p.camera_size, size, size.label());
-                        }
-                    });
+                {
+                    let combo = egui::ComboBox::from_id_salt("record-camera-size")
+                        .selected_text(p.camera_size.label())
+                        .width(220.0)
+                        .show_ui(ui, |ui| {
+                            for size in CameraSize::ALL {
+                                ui.selectable_value(&mut p.camera_size, size, size.label());
+                            }
+                        });
+                    crate::layout::name(combo.response.clone(), "Camera size");
+                    combo
+                };
                 ui.end_row();
                 ui.label("");
                 ui.checkbox(&mut p.mirror, "Mirror the camera");
@@ -271,16 +283,20 @@ pub fn panel(ui: &mut egui::Ui, p: &mut RecordPanel, tokens: Tokens) -> bool {
                 Mic::Default => "Default".to_owned(),
                 Mic::Named(n) => n.clone(),
             };
-            egui::ComboBox::from_id_salt("record-mic")
-                .selected_text(mic_name)
-                .width(220.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut p.mic, Mic::Off, "None");
-                    ui.selectable_value(&mut p.mic, Mic::Default, "Default");
-                    for m in &d.mics {
-                        ui.selectable_value(&mut p.mic, Mic::Named(m.clone()), m);
-                    }
-                });
+            {
+                let combo = egui::ComboBox::from_id_salt("record-mic")
+                    .selected_text(mic_name)
+                    .width(220.0)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut p.mic, Mic::Off, "None");
+                        ui.selectable_value(&mut p.mic, Mic::Default, "Default");
+                        for m in &d.mics {
+                            ui.selectable_value(&mut p.mic, Mic::Named(m.clone()), m);
+                        }
+                    });
+                crate::layout::name(combo.response.clone(), "Microphone");
+                combo
+            };
             ui.end_row();
             if p.mic != Mic::Off {
                 ui.label("");

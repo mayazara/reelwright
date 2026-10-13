@@ -183,9 +183,18 @@ pub fn button(
     let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, active, label));
     let visuals = ui.style().interact_selectable(&resp, active);
-    if resp.hovered() || active {
+    if resp.hovered() || active || resp.has_focus() {
         ui.painter()
             .rect_filled(rect, CornerRadius::same(4), visuals.weak_bg_fill);
+    }
+    // Where keyboard focus is (reached with Tab).
+    if resp.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            CornerRadius::same(4),
+            ui.style().visuals.selection.stroke,
+            egui::StrokeKind::Inside,
+        );
     }
     draw(ui.painter(), rect.shrink(3.0), visuals.fg_stroke.color);
     resp.on_hover_text(label)

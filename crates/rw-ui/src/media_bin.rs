@@ -230,27 +230,38 @@ pub fn show(
         }
     });
     ui.add_space(4.0);
-    ui.add(
-        egui::TextEdit::singleline(&mut state.search)
-            .hint_text(SEARCH_HINT)
-            .desired_width(f32::INFINITY),
+    crate::layout::name(
+        ui.add(
+            egui::TextEdit::singleline(&mut state.search)
+                .hint_text(SEARCH_HINT)
+                .desired_width(f32::INFINITY),
+        ),
+        "Search media",
     );
     ui.horizontal(|ui| {
-        egui::ComboBox::from_id_salt("bin-filter")
-            .selected_text(state.filter.map_or("All types", MediaKind::label))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut state.filter, None, "All types");
-                for k in MediaKind::ALL {
-                    ui.selectable_value(&mut state.filter, Some(k), k.label());
-                }
-            });
-        egui::ComboBox::from_id_salt("bin-sort")
-            .selected_text(state.sort.label())
-            .show_ui(ui, |ui| {
-                for k in SortKey::ALL {
-                    ui.selectable_value(&mut state.sort, k, k.label());
-                }
-            });
+        {
+            let combo = egui::ComboBox::from_id_salt("bin-filter")
+                .selected_text(state.filter.map_or("All types", MediaKind::label))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut state.filter, None, "All types");
+                    for k in MediaKind::ALL {
+                        ui.selectable_value(&mut state.filter, Some(k), k.label());
+                    }
+                });
+            crate::layout::name(combo.response.clone(), "Show type");
+            combo
+        };
+        {
+            let combo = egui::ComboBox::from_id_salt("bin-sort")
+                .selected_text(state.sort.label())
+                .show_ui(ui, |ui| {
+                    for k in SortKey::ALL {
+                        ui.selectable_value(&mut state.sort, k, k.label());
+                    }
+                });
+            crate::layout::name(combo.response.clone(), "Sort by");
+            combo
+        };
     });
     ui.separator();
 
@@ -455,7 +466,10 @@ fn rename_modal(ctx: &egui::Context, state: &mut BinState) -> Option<BinAction> 
     let modal = egui::Modal::new(egui::Id::new("rename-media")).show(ctx, |ui| {
         ui.set_width(360.0);
         ui.label("Rename media");
-        let edit = ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
+        let edit = crate::layout::name(
+            ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY)),
+            "Rename media",
+        );
         let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         ui.horizontal(|ui| {
             if (ui.button("Rename").clicked() || enter) && !name.trim().is_empty() {

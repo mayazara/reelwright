@@ -489,7 +489,10 @@ fn setup(
             });
             ui.end_row();
             ui.label("Name");
-            ui.add(egui::TextEdit::singleline(&mut d.name).desired_width(300.0));
+            crate::layout::name(
+                ui.add(egui::TextEdit::singleline(&mut d.name).desired_width(300.0)),
+                "File name",
+            );
             ui.end_row();
             ui.label("Folder");
             ui.horizontal(|ui| {
@@ -516,16 +519,21 @@ fn setup(
                     .show(ui, |ui| {
                         ui.label("Format");
                         let codecs = d.codecs();
-                        egui::ComboBox::from_id_salt("export-codec")
-                            .selected_text(d.codec.label())
-                            .width(260.0)
-                            .show_ui(ui, |ui| {
-                                for c in codecs {
-                                    if ui.selectable_value(&mut d.codec, c, c.label()).clicked() {
-                                        d.encoder = None;
+                        {
+                            let combo = egui::ComboBox::from_id_salt("export-codec")
+                                .selected_text(d.codec.label())
+                                .width(260.0)
+                                .show_ui(ui, |ui| {
+                                    for c in codecs {
+                                        if ui.selectable_value(&mut d.codec, c, c.label()).clicked()
+                                        {
+                                            d.encoder = None;
+                                        }
                                     }
-                                }
-                            });
+                                });
+                            crate::layout::name(combo.response.clone(), "Format");
+                            combo
+                        };
                         if d.probe.is_some() {
                             ui.spinner()
                                 .on_hover_text("Checking which encoders work here");
@@ -541,20 +549,24 @@ fn setup(
                             .encoder
                             .as_deref()
                             .map_or("Automatic (best available)".to_owned(), encoder_label);
-                        egui::ComboBox::from_id_salt("export-encoder")
-                            .selected_text(current)
-                            .width(260.0)
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut d.encoder,
-                                    None,
-                                    "Automatic (best available)",
-                                );
-                                for e in list {
-                                    let label = encoder_label(&e);
-                                    ui.selectable_value(&mut d.encoder, Some(e), label);
-                                }
-                            });
+                        {
+                            let combo = egui::ComboBox::from_id_salt("export-encoder")
+                                .selected_text(current)
+                                .width(260.0)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut d.encoder,
+                                        None,
+                                        "Automatic (best available)",
+                                    );
+                                    for e in list {
+                                        let label = encoder_label(&e);
+                                        ui.selectable_value(&mut d.encoder, Some(e), label);
+                                    }
+                                });
+                            crate::layout::name(combo.response.clone(), "Encoder");
+                            combo
+                        };
                         ui.end_row();
                         ui.label("Frame rate");
                         let current = d.rate.map_or_else(
@@ -566,19 +578,23 @@ fn setup(
                             },
                             rate_label,
                         );
-                        egui::ComboBox::from_id_salt("export-rate")
-                            .selected_text(current)
-                            .width(260.0)
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut d.rate, None, "Same as project");
-                                for (n, den, label) in RATES {
-                                    ui.selectable_value(
-                                        &mut d.rate,
-                                        Some(FrameRate::new(*n, *den)),
-                                        *label,
-                                    );
-                                }
-                            });
+                        {
+                            let combo = egui::ComboBox::from_id_salt("export-rate")
+                                .selected_text(current)
+                                .width(260.0)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut d.rate, None, "Same as project");
+                                    for (n, den, label) in RATES {
+                                        ui.selectable_value(
+                                            &mut d.rate,
+                                            Some(FrameRate::new(*n, *den)),
+                                            *label,
+                                        );
+                                    }
+                                });
+                            crate::layout::name(combo.response.clone(), "Frame rate");
+                            combo
+                        };
                         ui.end_row();
                     });
             });

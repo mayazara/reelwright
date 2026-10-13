@@ -198,6 +198,31 @@ impl Session {
             }
             EditorAction::Seek(t) => self.seek(t),
             EditorAction::PlayPause => self.toggle_play(),
+            EditorAction::SelectAtPlayhead => {
+                let at = self.playhead();
+                // Top to bottom as drawn: pictures and text from the top
+                // track down, then sound tracks.
+                let (sound, pictures): (Vec<_>, Vec<_>) = self
+                    .project
+                    .tracks
+                    .iter()
+                    .partition(|t| t.kind == TrackKind::Audio);
+                let under: Vec<ItemId> = pictures
+                    .into_iter()
+                    .rev()
+                    .chain(sound)
+                    .flat_map(|t| t.items.iter().filter(|i| i.contains(at)).map(|i| i.id))
+                    .collect();
+                let next = match self.selection.iter().collect::<Vec<_>>()[..] {
+                    [one] => under.iter().position(|i| i == one).map_or(0, |p| p + 1),
+                    _ => 0,
+                };
+                match under.get(next).or(under.first()) {
+                    Some(id) => self.selection = [*id].into_iter().collect(),
+                    None => self.notify("Nothing under the playhead to select."),
+                }
+            }
+            EditorAction::ClearSelection => self.selection.clear(),
             EditorAction::SplitAtPlayhead => {
                 let at = self.playhead();
                 let items = self.selected();

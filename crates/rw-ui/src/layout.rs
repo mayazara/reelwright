@@ -70,3 +70,13 @@ pub fn steady_text(
     }
     resp
 }
+
+/// Gives a control its name for screen readers: the text of the label
+/// shown beside it (or what it's for, where no label is shown).
+pub fn name(response: egui::Response, name: &str) -> egui::Response {
+    let name = name.to_owned();
+    response.ctx.accesskit_node_builder(response.id, |node| {
+        node.set_label(name);
+    });
+    response
+}

@@ -74,3 +74,64 @@ fn shortcut_list_opens_from_the_top_bar_and_question_mark() {
     h.run_ok();
     h.get_by_label(cheat_sheet::TITLE);
 }
+
+#[test]
+fn enter_selects_clips_at_the_playhead_and_escape_clears() {
+    use rw_model::{Item, ShapeKind, ShapeSpec, Time};
+    use rw_ui::actions::EditorAction;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut h = harness(tmp.path());
+    for kind in [ShapeKind::Star, ShapeKind::Ellipse] {
+        let mut shape = Item::shape_item(ShapeSpec::new(kind), Time::ZERO);
+        shape.duration = Time::from_secs(2);
+        h.state_mut()
+            .editor_mut()
+            .apply(EditorAction::AddGraphic(shape));
+        h.run_ok();
+    }
+    let ed = h.state_mut().editor_mut();
+    ed.session.as_mut().unwrap().selection.clear();
+    ed.session.as_mut().unwrap().seek(Time::from_secs(1));
+    h.run_ok();
+    let selected = |h: &Harness<'_, App>| {
+        let s = h.state().editor().session.as_ref().unwrap();
+        s.selection.iter().copied().collect::<Vec<_>>()
+    };
+    let shape_of = |h: &Harness<'_, App>, id| {
+        let p = &h.state().editor().session.as_ref().unwrap().project;
+        p.find_item(id).unwrap().1.clone()
+    };
+    h.key_press(egui::Key::Enter);
+    h.run_ok();
+    let first = selected(&h);
+    assert_eq!(first.len(), 1);
+    // The top one first (added last), then the next track down, then round.
+    assert!(format!("{:?}", shape_of(&h, first[0]).kind).contains("Ellipse"));
+    h.key_press(egui::Key::Enter);
+    h.run_ok();
+    let second = selected(&h);
+    assert!(format!("{:?}", shape_of(&h, second[0]).kind).contains("Star"));
+    h.key_press(egui::Key::Enter);
+    h.run_ok();
+    assert_eq!(selected(&h), first);
+    // Keyboard editing works on it: delete with the keyboard.
+    h.key_press(egui::Key::Delete);
+    h.run_ok();
+    assert_eq!(
+        h.state()
+            .editor()
+            .session
+            .as_ref()
+            .unwrap()
+            .project
+            .items()
+            .count(),
+        1
+    );
+    h.key_press(egui::Key::Enter);
+    h.run_ok();
+    assert_eq!(selected(&h).len(), 1);
+    h.key_press(egui::Key::Escape);
+    h.run_ok();
+    assert!(selected(&h).is_empty());
+}

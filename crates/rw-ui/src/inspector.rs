@@ -321,15 +321,19 @@ fn transform_tab(
     });
     ui.horizontal(|ui| {
         ui.label("Layout");
-        egui::ComboBox::from_id_salt("layout")
-            .selected_text("Choose…")
-            .show_ui(ui, |ui| {
-                for l in Layout::ALL {
-                    if ui.selectable_label(false, l.label()).clicked() {
-                        e.commit(with(&|n| *n = l.apply(*n)));
+        {
+            let combo = egui::ComboBox::from_id_salt("layout")
+                .selected_text("Choose…")
+                .show_ui(ui, |ui| {
+                    for l in Layout::ALL {
+                        if ui.selectable_label(false, l.label()).clicked() {
+                            e.commit(with(&|n| *n = l.apply(*n)));
+                        }
                     }
-                }
-            });
+                });
+            crate::layout::name(combo.response.clone(), "Layout");
+            combo
+        };
     });
     egui::Grid::new("transform")
         .num_columns(2)
@@ -338,17 +342,22 @@ fn transform_tab(
             ui.label("Position");
             ui.horizontal(|ui| {
                 let (mut x, mut y) = (t.center[0], t.center[1]);
-                let rx = ui.add(pct(&mut x)).on_hover_text("Horizontal centre");
+                let rx = crate::layout::name(ui.add(pct(&mut x)), "Horizontal position")
+                    .on_hover_text("Horizontal centre");
                 e.live(&rx, with(&|n| n.center[0] = x));
-                let ry = ui.add(pct(&mut y)).on_hover_text("Vertical centre");
+                let ry = crate::layout::name(ui.add(pct(&mut y)), "Vertical position")
+                    .on_hover_text("Vertical centre");
                 e.live(&ry, with(&|n| n.center[1] = y));
             });
             ui.end_row();
             ui.label("Scale");
             let mut scale = t.scale();
-            let r = ui.add(
-                egui::Slider::new(&mut scale, 0.05..=3.0)
-                    .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+            let r = crate::layout::name(
+                ui.add(
+                    egui::Slider::new(&mut scale, 0.05..=3.0)
+                        .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+                ),
+                "Scale",
             );
             let ratio = scale / t.scale().max(1e-4);
             e.live(
@@ -359,18 +368,21 @@ fn transform_tab(
             ui.label("Width / height");
             ui.horizontal(|ui| {
                 let (mut w, mut h) = (t.size[0], t.size[1]);
-                let rw = ui.add(pct(&mut w));
+                let rw = crate::layout::name(ui.add(pct(&mut w)), "Width");
                 e.live(&rw, with(&|n| n.size[0] = w));
-                let rh = ui.add(pct(&mut h));
+                let rh = crate::layout::name(ui.add(pct(&mut h)), "Height");
                 e.live(&rh, with(&|n| n.size[1] = h));
             });
             ui.end_row();
             ui.label("Rotation");
             let mut rot = t.rotation;
-            let r = ui.add(
-                egui::Slider::new(&mut rot, 0.0..=359.9)
-                    .suffix("°")
-                    .max_decimals(1),
+            let r = crate::layout::name(
+                ui.add(
+                    egui::Slider::new(&mut rot, 0.0..=359.9)
+                        .suffix("°")
+                        .max_decimals(1),
+                ),
+                "Rotation",
             );
             e.live(&r, with(&|n| n.rotation = rot));
             ui.end_row();
@@ -386,9 +398,12 @@ fn transform_tab(
             ui.end_row();
             ui.label("Opacity");
             let mut op = look.opacity;
-            let r = ui.add(
-                egui::Slider::new(&mut op, 0.0..=1.0)
-                    .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+            let r = crate::layout::name(
+                ui.add(
+                    egui::Slider::new(&mut op, 0.0..=1.0)
+                        .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+                ),
+                "Opacity",
             );
             e.live(
                 &r,
@@ -399,18 +414,22 @@ fn transform_tab(
             );
             ui.end_row();
             ui.label("Blend");
-            egui::ComboBox::from_id_salt("blend")
-                .selected_text(look.blend.label())
-                .show_ui(ui, |ui| {
-                    for b in BlendMode::ALL {
-                        if ui.selectable_label(look.blend == b, b.label()).clicked() {
-                            e.commit(LookPatch {
-                                blend: Some(b),
-                                ..LookPatch::default()
-                            });
+            {
+                let combo = egui::ComboBox::from_id_salt("blend")
+                    .selected_text(look.blend.label())
+                    .show_ui(ui, |ui| {
+                        for b in BlendMode::ALL {
+                            if ui.selectable_label(look.blend == b, b.label()).clicked() {
+                                e.commit(LookPatch {
+                                    blend: Some(b),
+                                    ..LookPatch::default()
+                                });
+                            }
                         }
-                    }
-                });
+                    });
+                crate::layout::name(combo.response.clone(), "Blend");
+                combo
+            };
             ui.end_row();
         });
     if reset_button(
@@ -459,9 +478,12 @@ fn transform_tab(
             ] {
                 ui.label(label);
                 let mut v = value;
-                let r = ui.add(
-                    egui::Slider::new(&mut v, 0.0..=0.95)
-                        .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+                let r = crate::layout::name(
+                    ui.add(
+                        egui::Slider::new(&mut v, 0.0..=0.95)
+                            .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+                    ),
+                    label,
                 );
                 let mut n = c;
                 match label {
@@ -501,7 +523,10 @@ fn colour_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, color: &ColorAdjust) {
             for c in ColorControl::ALL {
                 ui.label(c.label());
                 let mut v = color.get(c);
-                let r = ui.add(egui::Slider::new(&mut v, c.range()).max_decimals(2));
+                let r = crate::layout::name(
+                    ui.add(egui::Slider::new(&mut v, c.range()).max_decimals(2)),
+                    c.label(),
+                );
                 let mut n = *color;
                 n.set(c, v);
                 e.live(
@@ -541,9 +566,12 @@ fn filters_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, look: &Look, tokens: Tokens
         ui.horizontal(|ui| {
             ui.label("Intensity");
             let mut v = f.intensity;
-            let r = ui.add(
-                egui::Slider::new(&mut v, 0.0..=1.0)
-                    .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+            let r = crate::layout::name(
+                ui.add(
+                    egui::Slider::new(&mut v, 0.0..=1.0)
+                        .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+                ),
+                "Intensity",
             );
             e.live(
                 &r,
@@ -697,9 +725,12 @@ fn effects_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, look: &Look, item: ItemId, 
                         "Intensity"
                     });
                     let mut v = fx.intensity;
-                    let r = ui.add(
-                        egui::Slider::new(&mut v, 0.0..=1.0)
-                            .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+                    let r = crate::layout::name(
+                        ui.add(
+                            egui::Slider::new(&mut v, 0.0..=1.0)
+                                .custom_formatter(|v, _| format!("{:.0} %", v * 100.0)),
+                        ),
+                        "Intensity",
                     );
                     e.live(&r, with(&|fxs| fxs[i].intensity = v));
                     ui.end_row();
@@ -711,7 +742,10 @@ fn effects_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, look: &Look, item: ItemId, 
                     for (k, p) in info.params.iter().enumerate().skip(skip) {
                         ui.label(p.name);
                         let mut v = params[k];
-                        let r = ui.add(egui::Slider::new(&mut v, p.min..=p.max).max_decimals(2));
+                        let r = crate::layout::name(
+                            ui.add(egui::Slider::new(&mut v, p.min..=p.max).max_decimals(2)),
+                            p.name,
+                        );
                         e.live(
                             &r,
                             with(&|fxs| {
@@ -807,11 +841,14 @@ fn speed_tab(
         ui.label("Speed");
         let id = ui.make_persistent_id(("speed", &e.ids));
         let mut v: f32 = ui.data(|d| d.get_temp(id)).unwrap_or(first.speed);
-        let r = ui.add(
-            egui::Slider::new(&mut v, MIN_SPEED..=MAX_SPEED)
-                .logarithmic(true)
-                .custom_formatter(|v, _| format!("{v:.2}×"))
-                .custom_parser(|s| s.trim().trim_end_matches(['×', 'x']).trim().parse().ok()),
+        let r = crate::layout::name(
+            ui.add(
+                egui::Slider::new(&mut v, MIN_SPEED..=MAX_SPEED)
+                    .logarithmic(true)
+                    .custom_formatter(|v, _| format!("{v:.2}×"))
+                    .custom_parser(|s| s.trim().trim_end_matches(['×', 'x']).trim().parse().ok()),
+            ),
+            "Speed",
         );
         if r.changed() {
             ui.data_mut(|d| d.insert_temp(id, v));
@@ -901,31 +938,40 @@ fn transition_panel(
         .spacing([10.0, 6.0])
         .show(ui, |ui| {
             ui.label("Style");
-            egui::ComboBox::from_id_salt("transition-kind")
-                .selected_text(tr.kind.label())
-                .show_ui(ui, |ui| {
-                    for k in TransitionKind::ALL {
-                        if ui.selectable_label(tr.kind == k, k.label()).clicked() && k != tr.kind {
-                            out.push(EditorAction::Op(TimelineOp::SetTransition {
-                                id,
-                                kind: Some(k),
-                                duration: None,
-                            }));
+            {
+                let combo = egui::ComboBox::from_id_salt("transition-kind")
+                    .selected_text(tr.kind.label())
+                    .show_ui(ui, |ui| {
+                        for k in TransitionKind::ALL {
+                            if ui.selectable_label(tr.kind == k, k.label()).clicked()
+                                && k != tr.kind
+                            {
+                                out.push(EditorAction::Op(TimelineOp::SetTransition {
+                                    id,
+                                    kind: Some(k),
+                                    duration: None,
+                                }));
+                            }
                         }
-                    }
-                });
+                    });
+                crate::layout::name(combo.response.clone(), "Style");
+                combo
+            };
             ui.end_row();
             ui.label("Duration");
             let data_id = ui.make_persistent_id(("transition-length", id));
             let current = tr.duration.as_secs_f64();
             let mut v: f64 = ui.data(|d| d.get_temp(data_id)).unwrap_or(current);
-            let r = ui.add(
-                egui::Slider::new(
-                    &mut v,
-                    MIN_TRANSITION.as_secs_f64()..=MAX_TRANSITION.as_secs_f64(),
-                )
-                .suffix(" s")
-                .max_decimals(2),
+            let r = crate::layout::name(
+                ui.add(
+                    egui::Slider::new(
+                        &mut v,
+                        MIN_TRANSITION.as_secs_f64()..=MAX_TRANSITION.as_secs_f64(),
+                    )
+                    .suffix(" s")
+                    .max_decimals(2),
+                ),
+                "Duration",
             );
             if r.changed() {
                 ui.data_mut(|d| d.insert_temp(data_id, v));
@@ -1017,11 +1063,14 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
 
     if spec.behaviour != TextBehaviour::Countdown {
         let mut text = spec.text.clone();
-        let r = ui.add(
-            egui::TextEdit::multiline(&mut text)
-                .desired_rows(3)
-                .desired_width(f32::INFINITY)
-                .hint_text("Type your text"),
+        let r = crate::layout::name(
+            ui.add(
+                egui::TextEdit::multiline(&mut text)
+                    .desired_rows(3)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("Type your text"),
+            ),
+            "Text",
         );
         e.live_text(&r, id, with(&|n| n.text = text.clone()), true);
     }
@@ -1055,48 +1104,57 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
         .spacing([10.0, 6.0])
         .show(ui, |ui| {
             ui.label("Font");
-            egui::ComboBox::from_id_salt("text-font")
-                .selected_text(&s.font)
-                .width(180.0)
-                .height(360.0)
-                .show_ui(ui, |ui| {
-                    let (bundled, system) = rw_text::font_families();
-                    for f in bundled {
-                        if ui.selectable_label(s.font == f, &f).clicked() {
-                            e.commit_text(id, with(&|n| n.style.font = f.clone()));
-                        }
-                    }
-                    if !system.is_empty() {
-                        ui.separator();
-                        ui.label(
-                            RichText::new("On this computer")
-                                .small()
-                                .color(tokens.text_muted),
-                        );
-                        for f in system {
+            {
+                let combo = egui::ComboBox::from_id_salt("text-font")
+                    .selected_text(&s.font)
+                    .width(180.0)
+                    .height(360.0)
+                    .show_ui(ui, |ui| {
+                        let (bundled, system) = rw_text::font_families();
+                        for f in bundled {
                             if ui.selectable_label(s.font == f, &f).clicked() {
                                 e.commit_text(id, with(&|n| n.style.font = f.clone()));
                             }
                         }
-                    }
-                });
+                        if !system.is_empty() {
+                            ui.separator();
+                            ui.label(
+                                RichText::new("On this computer")
+                                    .small()
+                                    .color(tokens.text_muted),
+                            );
+                            for f in system {
+                                if ui.selectable_label(s.font == f, &f).clicked() {
+                                    e.commit_text(id, with(&|n| n.style.font = f.clone()));
+                                }
+                            }
+                        }
+                    });
+                crate::layout::name(combo.response.clone(), "Font");
+                combo
+            };
             ui.end_row();
 
             ui.label("Size");
             let mut v = s.size;
-            let r = ui
-                .add(
+            let r = crate::layout::name(
+                ui.add(
                     egui::Slider::new(&mut v, MIN_TEXT_SIZE..=MAX_TEXT_SIZE)
                         .logarithmic(true)
                         .custom_formatter(|v, _| format!("{:.1} %", v * 100.0)),
-                )
-                .on_hover_text("Letter height as a share of the frame height");
+                ),
+                "Size",
+            )
+            .on_hover_text("Letter height as a share of the frame height");
             e.live_text(&r, id, with(&|n| n.style.size = v), false);
             ui.end_row();
 
             ui.label("Weight");
             let mut w = s.weight;
-            let r = ui.add(egui::Slider::new(&mut w, 100..=900).step_by(100.0));
+            let r = crate::layout::name(
+                ui.add(egui::Slider::new(&mut w, 100..=900).step_by(100.0)),
+                "Weight",
+            );
             e.live_text(&r, id, with(&|n| n.style.weight = w), false);
             ui.end_row();
 
@@ -1123,13 +1181,19 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
 
             ui.label("Letter spacing");
             let mut v = s.letter_spacing;
-            let r = ui.add(egui::Slider::new(&mut v, -0.1..=0.5).max_decimals(2));
+            let r = crate::layout::name(
+                ui.add(egui::Slider::new(&mut v, -0.1..=0.5).max_decimals(2)),
+                "Letter spacing",
+            );
             e.live_text(&r, id, with(&|n| n.style.letter_spacing = v), false);
             ui.end_row();
 
             ui.label("Line spacing");
             let mut v = s.line_spacing;
-            let r = ui.add(egui::Slider::new(&mut v, 0.8..=2.5).max_decimals(2));
+            let r = crate::layout::name(
+                ui.add(egui::Slider::new(&mut v, 0.8..=2.5).max_decimals(2)),
+                "Line spacing",
+            );
             e.live_text(&r, id, with(&|n| n.style.line_spacing = v), false);
             ui.end_row();
         });
@@ -1158,9 +1222,11 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
                 "outline",
             );
             let mut w = o.width;
-            let r = ui
-                .add(egui::Slider::new(&mut w, 0.0..=0.3).max_decimals(2))
-                .on_hover_text("Thickness, as a share of the letter height");
+            let r = crate::layout::name(
+                ui.add(egui::Slider::new(&mut w, 0.0..=0.3).max_decimals(2)),
+                "Outline thickness",
+            )
+            .on_hover_text("Thickness, as a share of the letter height");
             e.live_text(
                 &r,
                 id,
@@ -1188,9 +1254,11 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
                 "shadow",
             );
             let mut b = sh.blur;
-            let r = ui
-                .add(egui::Slider::new(&mut b, 0.0..=0.5).max_decimals(2))
-                .on_hover_text("Softness");
+            let r = crate::layout::name(
+                ui.add(egui::Slider::new(&mut b, 0.0..=0.5).max_decimals(2)),
+                "Shadow softness",
+            )
+            .on_hover_text("Softness");
             e.live_text(
                 &r,
                 id,
@@ -1204,7 +1272,10 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
             ui.label("Distance");
             let mut d = (sh.offset[0].powi(2) + sh.offset[1].powi(2)).sqrt();
             let angle = sh.offset[1].atan2(sh.offset[0]);
-            let r = ui.add(egui::Slider::new(&mut d, 0.0..=0.5).max_decimals(2));
+            let r = crate::layout::name(
+                ui.add(egui::Slider::new(&mut d, 0.0..=0.5).max_decimals(2)),
+                "Distance",
+            );
             e.live_text(
                 &r,
                 id,
@@ -1251,7 +1322,10 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
             .show(ui, |ui| {
                 ui.label("Padding");
                 let mut v = b.padding;
-                let r = ui.add(egui::Slider::new(&mut v, 0.0..=2.0).max_decimals(2));
+                let r = crate::layout::name(
+                    ui.add(egui::Slider::new(&mut v, 0.0..=2.0).max_decimals(2)),
+                    "Padding",
+                );
                 e.live_text(
                     &r,
                     id,
@@ -1261,7 +1335,10 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
                 ui.end_row();
                 ui.label("Corners");
                 let mut v = b.radius;
-                let r = ui.add(egui::Slider::new(&mut v, 0.0..=2.0).max_decimals(2));
+                let r = crate::layout::name(
+                    ui.add(egui::Slider::new(&mut v, 0.0..=2.0).max_decimals(2)),
+                    "Corners",
+                );
                 e.live_text(
                     &r,
                     id,
@@ -1281,36 +1358,45 @@ fn text_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item, tokens: Tokens) {
         .show(ui, |ui| {
             for (label, current, enter) in [("In", spec.enter, true), ("Out", spec.exit, false)] {
                 ui.label(label);
-                egui::ComboBox::from_id_salt(("text-motion", label))
-                    .selected_text(current.motion.label())
-                    .width(130.0)
-                    .show_ui(ui, |ui| {
-                        for m in TextMotion::ALL {
-                            if ui
-                                .selectable_label(current.motion == m, m.label())
-                                .clicked()
-                            {
-                                let anim = TextAnimation {
-                                    motion: m,
-                                    duration: if current.duration > Time::ZERO {
-                                        current.duration
-                                    } else {
-                                        TextAnimation::DEFAULT_DURATION
-                                    },
-                                };
-                                e.commit_text(
-                                    id,
-                                    with(&|n| if enter { n.enter = anim } else { n.exit = anim }),
-                                );
+                {
+                    let combo = egui::ComboBox::from_id_salt(("text-motion", label))
+                        .selected_text(current.motion.label())
+                        .width(130.0)
+                        .show_ui(ui, |ui| {
+                            for m in TextMotion::ALL {
+                                if ui
+                                    .selectable_label(current.motion == m, m.label())
+                                    .clicked()
+                                {
+                                    let anim = TextAnimation {
+                                        motion: m,
+                                        duration: if current.duration > Time::ZERO {
+                                            current.duration
+                                        } else {
+                                            TextAnimation::DEFAULT_DURATION
+                                        },
+                                    };
+                                    e.commit_text(
+                                        id,
+                                        with(&|n| {
+                                            if enter { n.enter = anim } else { n.exit = anim }
+                                        }),
+                                    );
+                                }
                             }
-                        }
-                    });
+                        });
+                    crate::layout::name(combo.response.clone(), label);
+                    combo
+                };
                 let mut v = current.duration.as_secs_f64();
-                let r = ui.add_enabled(
-                    current.motion != TextMotion::None,
-                    egui::Slider::new(&mut v, 0.0..=max)
-                        .suffix(" s")
-                        .max_decimals(1),
+                let r = crate::layout::name(
+                    ui.add_enabled(
+                        current.motion != TextMotion::None,
+                        egui::Slider::new(&mut v, 0.0..=max)
+                            .suffix(" s")
+                            .max_decimals(1),
+                    ),
+                    "Motion length",
                 );
                 let anim = TextAnimation {
                     duration: Time::from_secs_f64(v),
@@ -1370,36 +1456,40 @@ fn shape_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item) {
         .spacing([10.0, 6.0])
         .show(ui, |ui| {
             ui.label("Shape");
-            egui::ComboBox::from_id_salt("shape-kind")
-                .selected_text(shape.kind.label())
-                .show_ui(ui, |ui| {
-                    for k in ShapeKind::ALL {
-                        if ui.selectable_label(shape.kind == k, k.label()).clicked()
-                            && k != shape.kind
-                        {
-                            // Keep the colours; take the new kind's proportions.
-                            let fresh = ShapeSpec::new(k);
-                            commit_kind(
-                                e,
-                                id,
-                                &with(&|n| {
-                                    n.kind = k;
-                                    n.aspect = fresh.aspect;
-                                    n.corner_radius = fresh.corner_radius;
-                                    if k.is_line() {
-                                        n.fill = None;
-                                    }
-                                }),
-                            );
+            {
+                let combo = egui::ComboBox::from_id_salt("shape-kind")
+                    .selected_text(shape.kind.label())
+                    .show_ui(ui, |ui| {
+                        for k in ShapeKind::ALL {
+                            if ui.selectable_label(shape.kind == k, k.label()).clicked()
+                                && k != shape.kind
+                            {
+                                // Keep the colours; take the new kind's proportions.
+                                let fresh = ShapeSpec::new(k);
+                                commit_kind(
+                                    e,
+                                    id,
+                                    &with(&|n| {
+                                        n.kind = k;
+                                        n.aspect = fresh.aspect;
+                                        n.corner_radius = fresh.corner_radius;
+                                        if k.is_line() {
+                                            n.fill = None;
+                                        }
+                                    }),
+                                );
+                            }
                         }
-                    }
-                });
+                    });
+                crate::layout::name(combo.response.clone(), "Shape");
+                combo
+            };
             ui.end_row();
             if !shape.kind.is_line() {
                 ui.label("Fill");
                 ui.horizontal(|ui| {
                     let mut on = shape.fill.is_some();
-                    if ui.checkbox(&mut on, "").changed() {
+                    if crate::layout::name(ui.checkbox(&mut on, ""), "Fill").changed() {
                         let c = on.then_some(Rgba([14, 124, 116, 255]));
                         commit_kind(e, id, &with(&|n| n.fill = c));
                     }
@@ -1420,7 +1510,7 @@ fn shape_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item) {
             ui.horizontal(|ui| {
                 if !shape.kind.is_line() {
                     let mut on = shape.stroke.is_some();
-                    if ui.checkbox(&mut on, "").changed() {
+                    if crate::layout::name(ui.checkbox(&mut on, ""), "Outline").changed() {
                         let s = on.then_some(rw_model::ShapeStroke {
                             color: Rgba([255, 255, 255, 255]),
                             width: 0.04,
@@ -1439,9 +1529,11 @@ fn shape_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item) {
                         );
                     }
                     let mut w = s.width;
-                    let r = ui
-                        .add(egui::Slider::new(&mut w, 0.005..=0.4).max_decimals(3))
-                        .on_hover_text("Thickness, as a share of the shape's height");
+                    let r = crate::layout::name(
+                        ui.add(egui::Slider::new(&mut w, 0.005..=0.4).max_decimals(3)),
+                        "Outline thickness",
+                    )
+                    .on_hover_text("Thickness, as a share of the shape's height");
                     if r.drag_stopped() || (r.changed() && !r.dragged()) {
                         commit_kind(
                             e,
@@ -1455,7 +1547,10 @@ fn shape_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item) {
             if matches!(shape.kind, ShapeKind::Rectangle | ShapeKind::SpeechBubble) {
                 ui.label("Corners");
                 let mut v = shape.corner_radius;
-                let r = ui.add(egui::Slider::new(&mut v, 0.0..=0.5).max_decimals(2));
+                let r = crate::layout::name(
+                    ui.add(egui::Slider::new(&mut v, 0.0..=0.5).max_decimals(2)),
+                    "Corners",
+                );
                 if r.drag_stopped() || (r.changed() && !r.dragged()) {
                     commit_kind(e, id, &with(&|n| n.corner_radius = v));
                 }
@@ -1497,7 +1592,7 @@ fn visualiser_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item) {
             if v.style != VisualiserStyle::Wave {
                 ui.label("Bars");
                 let mut b = v.bars;
-                let r = ui.add(egui::Slider::new(&mut b, 8..=128));
+                let r = crate::layout::name(ui.add(egui::Slider::new(&mut b, 8..=128)), "Bars");
                 if r.drag_stopped() || (r.changed() && !r.dragged()) {
                     commit_kind(e, id, &with(&|n| n.bars = b));
                 }
@@ -1505,10 +1600,13 @@ fn visualiser_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, item: &Item) {
             }
             ui.label("Sensitivity");
             let mut s = v.sensitivity;
-            let r = ui.add(
-                egui::Slider::new(&mut s, 0.2..=4.0)
-                    .logarithmic(true)
-                    .max_decimals(2),
+            let r = crate::layout::name(
+                ui.add(
+                    egui::Slider::new(&mut s, 0.2..=4.0)
+                        .logarithmic(true)
+                        .max_decimals(2),
+                ),
+                "Sensitivity",
             );
             if r.drag_stopped() || (r.changed() && !r.dragged()) {
                 commit_kind(e, id, &with(&|n| n.sensitivity = s));
@@ -1554,10 +1652,13 @@ fn fade_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, items: &[Item]) {
         .show(ui, |ui| {
             ui.label("Fade in");
             let mut v = first.fade_in.as_secs_f64();
-            let r = ui.add(
-                egui::Slider::new(&mut v, 0.0..=max)
-                    .suffix(" s")
-                    .max_decimals(2),
+            let r = crate::layout::name(
+                ui.add(
+                    egui::Slider::new(&mut v, 0.0..=max)
+                        .suffix(" s")
+                        .max_decimals(2),
+                ),
+                "Fade in",
             );
             e.live(
                 &r,
@@ -1569,10 +1670,13 @@ fn fade_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, items: &[Item]) {
             ui.end_row();
             ui.label("Fade out");
             let mut v = first.fade_out.as_secs_f64();
-            let r = ui.add(
-                egui::Slider::new(&mut v, 0.0..=max)
-                    .suffix(" s")
-                    .max_decimals(2),
+            let r = crate::layout::name(
+                ui.add(
+                    egui::Slider::new(&mut v, 0.0..=max)
+                        .suffix(" s")
+                        .max_decimals(2),
+                ),
+                "Fade out",
             );
             e.live(
                 &r,
@@ -1607,7 +1711,7 @@ fn audio_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, items: &[Item], project: &rw_
                     format!("{v:+.1}")
                 }
             });
-        let r = ui.add(slider);
+        let r = crate::layout::name(ui.add(slider), VOLUME_LABEL);
         if r.changed() {
             ui.data_mut(|d| d.insert_temp(id, db));
         }
@@ -1700,7 +1804,10 @@ fn colour_editor(ui: &mut egui::Ui, id: &str, c: Rgba) -> (Option<Response>, Rgb
             .rect_filled(rect, 4.0, egui::Color32::from_rgb(c.0[0], c.0[1], c.0[2]));
         let hex_id = ui.make_persistent_id(("hex", id));
         let mut text: String = ui.data(|d| d.get_temp(hex_id)).unwrap_or_else(|| to_hex(c));
-        let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(80.0));
+        let r = crate::layout::name(
+            ui.add(egui::TextEdit::singleline(&mut text).desired_width(80.0)),
+            "Hex colour",
+        );
         if r.changed() {
             ui.data_mut(|d| d.insert_temp(hex_id, text.clone()));
         }
@@ -1714,21 +1821,24 @@ fn colour_editor(ui: &mut egui::Ui, id: &str, c: Rgba) -> (Option<Response>, Rgb
     });
     egui::Grid::new(("hsv", id)).num_columns(2).show(ui, |ui| {
         ui.label("Hue");
-        let r = ui.add(egui::Slider::new(&mut h2, 0.0..=359.0).suffix("°"));
+        let r = crate::layout::name(
+            ui.add(egui::Slider::new(&mut h2, 0.0..=359.0).suffix("°")),
+            "Hue",
+        );
         if r.changed() || r.drag_stopped() {
             out = from_hsv(h2, s, v);
             changed = Some(r);
         }
         ui.end_row();
         ui.label("Saturation");
-        let r = ui.add(egui::Slider::new(&mut s2, 0.0..=1.0));
+        let r = crate::layout::name(ui.add(egui::Slider::new(&mut s2, 0.0..=1.0)), "Saturation");
         if r.changed() || r.drag_stopped() {
             out = from_hsv(h, s2, v);
             changed = Some(r);
         }
         ui.end_row();
         ui.label("Brightness");
-        let r = ui.add(egui::Slider::new(&mut v2, 0.0..=1.0));
+        let r = crate::layout::name(ui.add(egui::Slider::new(&mut v2, 0.0..=1.0)), "Brightness");
         if r.changed() || r.drag_stopped() {
             out = from_hsv(h, s, v2);
             changed = Some(r);
@@ -1786,7 +1896,10 @@ fn background_tab(ui: &mut egui::Ui, e: &mut Edits<'_>, fill: Option<Generated>)
             ui.horizontal(|ui| {
                 ui.label("Angle");
                 let mut a = angle;
-                let r = ui.add(egui::Slider::new(&mut a, 0.0..=359.0).suffix("°"));
+                let r = crate::layout::name(
+                    ui.add(egui::Slider::new(&mut a, 0.0..=359.0).suffix("°")),
+                    "Angle",
+                );
                 if r.changed() || r.drag_stopped() {
                     e.live_fill(&r, Generated::Gradient { from, to, angle: a });
                 }
