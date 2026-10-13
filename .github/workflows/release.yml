@@ -1,8 +1,17 @@
 name: Release
 
-# Builds the Windows downloads: a one-click per-user installer and a
-# portable zip. Runs on version tags (publishing a draft GitHub release)
-# and on demand (artifacts only).
+# Builds the downloads for every OS and checks each one runs (self-test):
+#   Windows: one-click per-user installer and a portable zip
+#   macOS:   a DMG for Apple Silicon and one for Intel
+#   Linux:   an AppImage and a .deb
+# Runs on version tags (publishing a draft GitHub release with all of
+# them) and on demand (artifacts only).
+#
+# Signing happens when the secrets are set, and is skipped otherwise:
+#   Windows: WINDOWS_CERT_PFX (base64 .pfx) and WINDOWS_CERT_PASSWORD
+#   macOS:   MACOS_CERT_P12 (base64 .p12), MACOS_CERT_PASSWORD and
+#            MACOS_SIGN_IDENTITY; for notarising also APPLE_ID,
+#            APPLE_TEAM_ID and APPLE_APP_PASSWORD
 on:
   push:
     tags: ['v*']
@@ -104,6 +113,17 @@ jobs:
           Get-Content self-test.txt
           if ($p.ExitCode -ne 0) { throw "self-test failed ($($p.ExitCode))" }
 
+      - name: No other product's name in the app
+        shell: bash
+        run: scripts/check-binary-brand.sh dist/Reelwright/*.exe dist/Reelwright/*.dll
+
+      - name: Sign the app (when a certificate is configured)
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: packaging/windows/sign.ps1 dist\Reelwright\Reelwright.exe
+
       - name: Portable zip
         shell: pwsh
         run: Compress-Archive -Path dist\Reelwright -DestinationPath "dist\Reelwright-${{ steps.version.outputs.version }}-windows-x64-portable.zip"
@@ -115,6 +135,13 @@ jobs:
           if (-not (Test-Path $nsis)) { choco install nsis -y --no-progress; $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe" }
           & $nsis /V2 "/DVERSION=${{ steps.version.outputs.version }}" "/DSRC=$PWD\dist\Reelwright" "/DICON=$PWD\assets\branding\reelwright.ico" "/DOUTFILE=$PWD\dist\Reelwright-${{ steps.version.outputs.version }}-windows-x64-setup.exe" packaging\windows\installer.nsi
           if ($LASTEXITCODE -ne 0) { throw "makensis failed" }
+
+      - name: Sign the installer (when a certificate is configured)
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: packaging/windows/sign.ps1 (Get-ChildItem dist\*-setup.exe | Select-Object -First 1).FullName
 
       - name: Install silently, self-test, uninstall
         shell: pwsh
@@ -140,12 +167,185 @@ jobs:
             dist/*-setup.exe
             self-test.txt
 
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    env:
+      FFMPEG_PREFIX: ${{ github.workspace }}/third_party/ffmpeg/build/macos-${{ matrix.arch }}
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-macos-${{ matrix.arch }}
+      # The libraries FFmpeg uses are bundled into the app from Homebrew.
+      - run: brew install nasm pkg-config openh264 libvpx dav1d lame opus
+      - name: Cache FFmpeg
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FFMPEG_PREFIX }}
+          key: ffmpeg-macos-${{ matrix.arch }}-${{ hashFiles('scripts/ffmpeg/common.sh', 'scripts/ffmpeg/build-macos.sh') }}
+      - name: Build FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: PREFIX="$FFMPEG_PREFIX" scripts/ffmpeg/build-macos.sh
+      - name: Version
+        id: version
+        run: |
+          v=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF#refs/tags/v}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Build
+        run: |
+          export FFMPEG_DIR="$FFMPEG_PREFIX" PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig"
+          cargo build --release -p reelwright
+      - name: Third-party licence notices
+        run: |
+          cargo install cargo-about --locked --version 0.9.2 --features cli
+          cargo about generate -c packaging/about.toml packaging/about.hbs -o THIRD_PARTY_LICENSES.html
+      - name: Signing certificate (when configured)
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          if [[ -z "$MACOS_CERT_P12" ]]; then echo "No certificate: signing ad hoc."; exit 0; fi
+          kc="$RUNNER_TEMP/sign.keychain-db"
+          security create-keychain -p ci "$kc"
+          security set-keychain-settings "$kc"
+          security unlock-keychain -p ci "$kc"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$kc"
+          security list-keychains -d user -s "$kc"
+          echo "MACOS_SIGN_IDENTITY=$MACOS_SIGN_IDENTITY" >> "$GITHUB_ENV"
+      - name: App and DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: packaging/macos/build-app.sh "$FFMPEG_PREFIX" "${{ steps.version.outputs.version }}" "${{ matrix.arch }}" dist
+      - name: Self-test the app
+        run: |
+          dist/Reelwright.app/Contents/MacOS/Reelwright --self-test "$PWD/self-test.txt" || { cat self-test.txt; exit 1; }
+          cat self-test.txt
+      - name: No other product's name in the app
+        run: scripts/check-binary-brand.sh dist/Reelwright.app/Contents/MacOS/Reelwright dist/Reelwright.app/Contents/Frameworks/*.dylib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reelwright-macos-${{ matrix.arch }}-${{ steps.version.outputs.version }}
+          path: |
+            dist/*.dmg
+            dist/min-macos-*.txt
+            self-test.txt
+
+  linux:
+    # The oldest supported Ubuntu LTS runner, so the packages run on
+    # distributions from 2022 onwards.
+    runs-on: ubuntu-22.04
+    env:
+      FFMPEG_PREFIX: ${{ github.workspace }}/third_party/ffmpeg/build/linux-x86_64
+      # linuxdeploy is itself an AppImage; runners have no FUSE.
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-linux
+      - name: Build tools and libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential nasm pkg-config clang libclang-dev \
+            libxcb1-dev libxcb-shm0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libva-dev libdrm-dev libvpx-dev libdav1d-dev libmp3lame-dev libopus-dev zlib1g-dev \
+            libxkbcommon-dev libwayland-dev libasound2-dev mesa-vulkan-drivers \
+            patchelf dpkg-dev file desktop-file-utils
+      - name: OpenH264 (not packaged for this Ubuntu)
+        run: |
+          curl -fsSL https://github.com/cisco/openh264/archive/refs/tags/v2.4.1.tar.gz | tar -xz -C "$RUNNER_TEMP"
+          make -C "$RUNNER_TEMP/openh264-2.4.1" -j"$(nproc)" PREFIX=/usr/local
+          sudo make -C "$RUNNER_TEMP/openh264-2.4.1" install-shared PREFIX=/usr/local
+          sudo ldconfig
+      - name: Cache FFmpeg
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FFMPEG_PREFIX }}
+          key: ffmpeg-linux-x86_64-jammy-${{ hashFiles('scripts/ffmpeg/common.sh', 'scripts/ffmpeg/build-linux.sh') }}
+      - name: Build FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: PKG_CONFIG_PATH=/usr/local/lib/pkgconfig PREFIX="$FFMPEG_PREFIX" scripts/ffmpeg/build-linux.sh
+      - name: Version
+        id: version
+        run: |
+          v=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF#refs/tags/v}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Build
+        run: |
+          export FFMPEG_DIR="$FFMPEG_PREFIX" PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig"
+          cargo build --release -p reelwright
+      - name: Third-party licence notices
+        run: |
+          cargo install cargo-about --locked --version 0.9.2 --features cli
+          cargo about generate -c packaging/about.toml packaging/about.hbs -o THIRD_PARTY_LICENSES.html
+      - name: AppImage and .deb
+        run: |
+          # linuxdeploy's rolling build (a build tool; nothing of it ships
+          # except the AppImage runtime, MIT).
+          curl -fsSL -o "$RUNNER_TEMP/linuxdeploy" \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/linuxdeploy"
+          LINUXDEPLOY="$RUNNER_TEMP/linuxdeploy" packaging/linux/build-packages.sh \
+            "$FFMPEG_PREFIX" "${{ steps.version.outputs.version }}" dist
+      - name: Self-test the AppImage
+        run: |
+          app=$(ls dist/*.AppImage)
+          "$app" --self-test "$PWD/self-test.txt" || { cat self-test.txt; exit 1; }
+          cat self-test.txt
+      - name: Install the .deb, self-test, remove
+        run: |
+          sudo apt-get install -y ./dist/*.deb
+          reelwright --self-test "$PWD/deb-self-test.txt" || { cat deb-self-test.txt; exit 1; }
+          cat deb-self-test.txt
+          test -f /usr/share/applications/reelwright.desktop
+          desktop-file-validate /usr/share/applications/reelwright.desktop
+          sudo apt-get remove -y reelwright
+          test ! -e /usr/bin/reelwright
+      - name: No other product's name in the app
+        run: scripts/check-binary-brand.sh target/release/reelwright "$FFMPEG_PREFIX"/lib/*.so*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reelwright-linux-${{ steps.version.outputs.version }}
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            self-test.txt
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
       - name: Draft GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          ls -R artifacts
           gh release create "$GITHUB_REF_NAME" --draft --title "Reelwright $GITHUB_REF_NAME" \
-            --notes-file packaging/windows/RELEASE_NOTES.md \
-            dist/*-setup.exe dist/*.zip
+            --notes-file packaging/RELEASE_NOTES.md \
+            artifacts/*/*-setup.exe artifacts/*/*-portable.zip artifacts/*/*.dmg \
+            artifacts/*/*.AppImage artifacts/*/*.deb

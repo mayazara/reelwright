@@ -110,11 +110,44 @@ fn checks(r: &mut String) -> bool {
         Ok(())
     })();
     let _ = std::fs::remove_dir_all(&dir);
-    match result {
+    let exported = match result {
         Ok(()) => true,
         Err(e) => {
             let _ = writeln!(r, "export: FAILED {e}");
             false
         }
+    };
+    exported & licences(r)
+}
+
+/// The download carries every licence notice (FFmpeg's LGPL text and build
+/// configuration, the Rust crates' notices, fonts, stickers). Set
+/// RW_SELF_TEST_NO_LICENCES=1 to skip for builds from source.
+fn licences(r: &mut String) -> bool {
+    if std::env::var_os("RW_SELF_TEST_NO_LICENCES").is_some() {
+        return true;
+    }
+    let Some(dir) = rw_ui::reveal::licences_dir() else {
+        let _ = writeln!(r, "licences: FAILED no licences folder beside the app");
+        return false;
+    };
+    let needed = [
+        "THIRD_PARTY_LICENSES.html",
+        "ATTRIBUTION.md",
+        "OpenMoji-CC-BY-SA-4.0.txt",
+        "FFmpeg/COPYING.LGPLv2.1",
+        "FFmpeg/CONFIGURATION.txt",
+    ];
+    let missing: Vec<&str> = needed
+        .iter()
+        .copied()
+        .filter(|f| !dir.join(f).is_file())
+        .collect();
+    if missing.is_empty() {
+        let _ = writeln!(r, "licences: {}", dir.display());
+        true
+    } else {
+        let _ = writeln!(r, "licences: FAILED missing {}", missing.join(", "));
+        false
     }
 }

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Reelwright
+GenericName=Video Editor
+Comment=Edit videos on this computer, offline
+Exec=reelwright %F
+Icon=reelwright
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+MimeType=video/mp4;video/quicktime;video/webm;video/x-matroska;
+Keywords=video;editor;record;export;
+StartupWMClass=reelwright

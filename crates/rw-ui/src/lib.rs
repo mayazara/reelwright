@@ -17,7 +17,7 @@ pub mod media_bin;
 pub mod preview;
 pub mod record;
 pub mod recovery;
-mod reveal;
+pub mod reveal;
 pub mod session;
 pub mod settings;
 pub mod settings_window;

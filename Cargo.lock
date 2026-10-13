@@ -3287,6 +3287,7 @@ version = "0.3.0"
 name = "rw-assets"
 version = "0.3.0"
 dependencies = [
+ "blake3",
  "image",
  "resvg",
  "rw-model",

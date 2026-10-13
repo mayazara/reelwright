@@ -1,0 +1,3 @@
+# Assets ship byte for byte (assets/manifest.json pins their checksums):
+# no line-ending conversion on any OS.
+assets/** -text

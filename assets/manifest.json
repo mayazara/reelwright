@@ -1,0 +1,2265 @@
+{
+  "comment": "Every bundled asset with its size and BLAKE3 checksum. Regenerate: RW_UPDATE_MANIFEST=1 cargo test -p rw-assets --test manifest",
+  "files": {
+    "ATTRIBUTION.md": {
+      "blake3": "907b8dda5e267ac966eee1c6bef0954e62039c6bf516782f54faa7e0e6f85f84",
+      "bytes": 83229
+    },
+    "branding/icon-256.png": {
+      "blake3": "50d3342cd126868084ba9a6fca0f82d66999b23318bbf189724ff2ed25e6af13",
+      "bytes": 12107
+    },
+    "branding/logo.svg": {
+      "blake3": "712d41dbae3100c2a1299854054ac37d601f5a1274929bb6bd33229df581430d",
+      "bytes": 476
+    },
+    "branding/reelwright.ico": {
+      "blake3": "60694a033158397bedcb7b3e1057a3f1ff8f78fea8e8339e3535e3d923ab342a",
+      "bytes": 26063
+    },
+    "fonts/title/abrilfatface/AbrilFatface-Regular.ttf": {
+      "blake3": "4162a5f50d503fca4e8280601b3a7bd9d4a63d2081f9afe2b3422bf03f90620b",
+      "bytes": 67364
+    },
+    "fonts/title/abrilfatface/OFL.txt": {
+      "blake3": "f6d36494111a4ec0ff7894d702232a7d6c6a72c7d96d6da0a37321ce842d51c7",
+      "bytes": 4415
+    },
+    "fonts/title/anton/Anton-Regular.ttf": {
+      "blake3": "71ee8d8edf2c15eeb8a9d8b43ffc21a3e477a232f5b31c42a35922d65ab70b91",
+      "bytes": 170812
+    },
+    "fonts/title/anton/OFL.txt": {
+      "blake3": "4c7103683faf54e8407080c294e3be22f1a3b46c605be34d40c890e96c10e3f0",
+      "bytes": 4484
+    },
+    "fonts/title/archivoblack/ArchivoBlack-Regular.ttf": {
+      "blake3": "73fb8e7f65fd40b51288053d0ba7ddf0ce4ff98e47a90b9d8f5bee75b99aca08",
+      "bytes": 90988
+    },
+    "fonts/title/archivoblack/OFL.txt": {
+      "blake3": "7b3561ce3ab69f01c29342c8ca3e56e00ab50b30edc8307ff700ef7f4d668d96",
+      "bytes": 4492
+    },
+    "fonts/title/bangers/Bangers-Regular.ttf": {
+      "blake3": "4383107dc36da013fdf1c7b6954bd28e69056a30776a07740083f3145b1925a5",
+      "bytes": 93148
+    },
+    "fonts/title/bangers/OFL.txt": {
+      "blake3": "94c7229ce64cb916a528c85fce54864b903002c67879c59409d42ff993b5f43a",
+      "bytes": 4479
+    },
+    "fonts/title/bebasneue/BebasNeue-Regular.ttf": {
+      "blake3": "4186ed38fddfffe9536a57f3638e14c3401024abe8e70ac1f7bbe91ee27a1f65",
+      "bytes": 61400
+    },
+    "fonts/title/bebasneue/OFL.txt": {
+      "blake3": "aafe4d246590e6f1259d076ec80e38f0e597d0fc89b268b9dce14f0d8cdeb285",
+      "bytes": 4337
+    },
+    "fonts/title/caveat/Caveat-Variable.ttf": {
+      "blake3": "ce8174708ec56b2ec2caad6744468e1f31e099deccfb66ea303190d13da4160e",
+      "bytes": 403648
+    },
+    "fonts/title/caveat/OFL.txt": {
+      "blake3": "402de06aa0527183f3a11b0fe2af0f3215d9d0de31c7c60bc3c4182dfdc062a9",
+      "bytes": 4385
+    },
+    "fonts/title/courierprime/CourierPrime-Bold.ttf": {
+      "blake3": "2b40f26284198439f1a2f5d64c645f64e36400bd393ef96c8debc77a1c3e947f",
+      "bytes": 72856
+    },
+    "fonts/title/courierprime/CourierPrime-Regular.ttf": {
+      "blake3": "75a5fae57494d973332f8dc42f46c5dead831b0e986e7afb8c8f52cc436d0627",
+      "bytes": 71188
+    },
+    "fonts/title/courierprime/OFL.txt": {
+      "blake3": "e5b227f38399eca552eb44464d0252d552cd15b54e151c9211732c95607d687b",
+      "bytes": 4403
+    },
+    "fonts/title/crimsonpro/CrimsonPro-Variable.ttf": {
+      "blake3": "f25d3db1946bc6cd1711bc8a20a9331296d20339b215f469dac9ca9a4995e4bd",
+      "bytes": 246324
+    },
+    "fonts/title/crimsonpro/OFL.txt": {
+      "blake3": "2f070dde5c4a770470a69206f6712c4c0e5eb9a8e38321d191bb157949a42ded",
+      "bytes": 4393
+    },
+    "fonts/title/dancingscript/DancingScript-Variable.ttf": {
+      "blake3": "83486858b4661eac3ba6cfaa1273c2658c3436a0efee1ae0fd4d58813c288ef9",
+      "bytes": 133636
+    },
+    "fonts/title/dancingscript/OFL.txt": {
+      "blake3": "e013cc2e57cd357f731cae1614fce6a709eee768df5e905e6580d0d3e1861cde",
+      "bytes": 4443
+    },
+    "fonts/title/dmsans/DMSans-Variable.ttf": {
+      "blake3": "09fdc0fc324a3a18f57182df82fe3b50813bfc967a793a15744f4969abcb621a",
+      "bytes": 240164
+    },
+    "fonts/title/dmsans/OFL.txt": {
+      "blake3": "0319158a965b752e91d076c6ae215f0f29c267e7d768d7262c67e66793641525",
+      "bytes": 4482
+    },
+    "fonts/title/dmserifdisplay/DMSerifDisplay-Regular.ttf": {
+      "blake3": "25aa802f7809737346c06157351403c7715f16f8d10ceba4bd1149a088da6e12",
+      "bytes": 76580
+    },
+    "fonts/title/dmserifdisplay/OFL.txt": {
+      "blake3": "639f38784a91c04a98d84bf2c6ff7d951f8665ac070998a8b9e4792e226d8747",
+      "bytes": 4605
+    },
+    "fonts/title/ebgaramond/EBGaramond-Variable.ttf": {
+      "blake3": "ae424f1d4a78a5f2821f4d75feda922f1bda64c445f92a6794426b13a969d076",
+      "bytes": 851176
+    },
+    "fonts/title/ebgaramond/OFL.txt": {
+      "blake3": "e9b6f1295f975718aaacb65c9236bd0ff278721503bace1631a57b12db944919",
+      "bytes": 4398
+    },
+    "fonts/title/figtree/Figtree-Variable.ttf": {
+      "blake3": "1d2c85029a92d0627e4f9122f0e35d5bef1a7146b7e52f2ae20b80eea5b71cad",
+      "bytes": 62712
+    },
+    "fonts/title/figtree/OFL.txt": {
+      "blake3": "9dbf87b82438e43a7a8508b664d6ad4eb00c872ff1f67a0ca2ad5c95f226eb40",
+      "bytes": 4388
+    },
+    "fonts/title/fraunces/Fraunces-Variable.ttf": {
+      "blake3": "fd8bff0190966791f1451515dfde00cd05680fe8555eaba2a4a60111eacc5f27",
+      "bytes": 360440
+    },
+    "fonts/title/fraunces/OFL.txt": {
+      "blake3": "ee2230bbf6ee4f4246548b4fefff4ed4d9e353494c1fe80cd80da36eb7f27a44",
+      "bytes": 4391
+    },
+    "fonts/title/librebaskerville/LibreBaskerville-Variable.ttf": {
+      "blake3": "766ed94921ed4805b67eccacc32e9e419e6f6a76f7ee8dff2ffc2875905dd5e4",
+      "bytes": 171900
+    },
+    "fonts/title/librebaskerville/OFL.txt": {
+      "blake3": "044fd47742254fc15d655ff274a951f33a986fc5080085b481c90e917244c590",
+      "bytes": 4542
+    },
+    "fonts/title/lobster/Lobster-Regular.ttf": {
+      "blake3": "1d94260c4bfa9e30b50e7f25e11a653dd8b34cf33d7eb07a772079d5a7af094f",
+      "bytes": 406076
+    },
+    "fonts/title/lobster/OFL.txt": {
+      "blake3": "ed7cb3c0f216edbee7e694cb4d72036acfed4f5122115c4cf02ebfc9b6610292",
+      "bytes": 4430
+    },
+    "fonts/title/lora/Lora-Variable.ttf": {
+      "blake3": "b695d504661a545f1f4aa8468a2b1b100f08b07b568fd162d0cd133ec698a263",
+      "bytes": 212196
+    },
+    "fonts/title/lora/OFL.txt": {
+      "blake3": "0f95bf7045e1be24788f91cb619407c28501af2ea82f21322fd58c7dd470dffe",
+      "bytes": 4423
+    },
+    "fonts/title/manrope/Manrope-Variable.ttf": {
+      "blake3": "a6b50db6021e437f6ea8db04cefbf3b3cacd8d71aef0081b46d7fb130a62da6a",
+      "bytes": 164700
+    },
+    "fonts/title/manrope/OFL.txt": {
+      "blake3": "0c6d47a2c92e4d244d83df413b6b409a15f27831457951d8ab4f27aca5e6d51d",
+      "bytes": 4387
+    },
+    "fonts/title/monoton/Monoton-Regular.ttf": {
+      "blake3": "19d529ea237d4cf9116f6d54fafa170a4c2d07495ae1741fff345a23e6a09bd4",
+      "bytes": 51604
+    },
+    "fonts/title/monoton/OFL.txt": {
+      "blake3": "7e0d0f28e42f140dfd17651956e6b9cbb0eb4d329fc921aecb05304b610989c6",
+      "bytes": 4401
+    },
+    "fonts/title/montserrat/Montserrat-Variable.ttf": {
+      "blake3": "6414d8f9d59b6146738b8d9bca6dbfb8434d656b896d67711ccc09c4bbe4e8e2",
+      "bytes": 744936
+    },
+    "fonts/title/montserrat/OFL.txt": {
+      "blake3": "d258a210395af50f5aced44dbf93af5f6bb47941a4aebdc28ea20315da842a58",
+      "bytes": 4400
+    },
+    "fonts/title/notosansarabic/NotoSansArabic-Variable.ttf": {
+      "blake3": "4a342d86d6715ab55fe1d63106508868d9a74488942f5debb5598d1c35a3c86b",
+      "bytes": 844676
+    },
+    "fonts/title/notosansarabic/OFL.txt": {
+      "blake3": "e8c5f1738bb1e864c6afb9ee8d9a0a0e7e87b68e715a2bb7d061661cdc82e27f",
+      "bytes": 4382
+    },
+    "fonts/title/notosansdevanagari/NotoSansDevanagari-Variable.ttf": {
+      "blake3": "55717c3464609b312f938f517ae8d7218ad29fb9eef6b2c2fab7078abba128f0",
+      "bytes": 641944
+    },
+    "fonts/title/notosansdevanagari/OFL.txt": {
+      "blake3": "6792878881edfb63c78f8f82a6178bad482771fd23ef99219f0c2021f5564da8",
+      "bytes": 4386
+    },
+    "fonts/title/nunito/Nunito-Variable.ttf": {
+      "blake3": "f80a7edf6db6e2845f24ca4683773750f258c0ada7d7fb506164c6ee82d2a04a",
+      "bytes": 276932
+    },
+    "fonts/title/nunito/OFL.txt": {
+      "blake3": "276da13a9b5caa0bf7c3d4c479a78107f9ca969664b4f010f258fe745a8b76f6",
+      "bytes": 4385
+    },
+    "fonts/title/oswald/OFL.txt": {
+      "blake3": "8290f3517209518f9b87378f370c51b26a834b36f6a55c63ca81d975369707c7",
+      "bytes": 4483
+    },
+    "fonts/title/oswald/Oswald-Variable.ttf": {
+      "blake3": "c8d588abf8bda9c14ab6a69ed558a6eb7f3408ede440923e00dbaf5f88d18482",
+      "bytes": 172088
+    },
+    "fonts/title/outfit/OFL.txt": {
+      "blake3": "3a3ae77caa917ca0b7da2f9a5ab0b52bebc37c2a63464a95afce625f2cca3976",
+      "bytes": 4389
+    },
+    "fonts/title/outfit/Outfit-Variable.ttf": {
+      "blake3": "522e0606da591e02076234e8b784dd3e662fcd8f8a1bdddcd33151d918794ed4",
+      "bytes": 110884
+    },
+    "fonts/title/pacifico/OFL.txt": {
+      "blake3": "a11ad5c503f4e6ae4620ae700fa898321e2c07a128e7edfc0b27d9e5ca9543fe",
+      "bytes": 4389
+    },
+    "fonts/title/pacifico/Pacifico-Regular.ttf": {
+      "blake3": "67da86b51b1c92954a50b1dcee191ebbc8141aa398af37f79b9281253e5ae61f",
+      "bytes": 329380
+    },
+    "fonts/title/playfairdisplay/OFL.txt": {
+      "blake3": "4e48acae95356b4fa08cfacf8e1bdf8a388df20d3b9ad091bae63f5ca7291b7a",
+      "bytes": 4449
+    },
+    "fonts/title/playfairdisplay/PlayfairDisplay-Variable.ttf": {
+      "blake3": "26e7b80281220846d74464054270dbe44ceb95d9591c759cf04bb6dc08feefc2",
+      "bytes": 300724
+    },
+    "fonts/title/poppins/OFL.txt": {
+      "blake3": "53e3e07b8ce754606007c8c82cf98fb933f4918b4d51052308e4199c9e1b2c72",
+      "bytes": 4385
+    },
+    "fonts/title/poppins/Poppins-Bold.ttf": {
+      "blake3": "8a2917fee49b81f9abf86539866763af89b5583a207990bd308d9a6efe397d00",
+      "bytes": 155996
+    },
+    "fonts/title/poppins/Poppins-Regular.ttf": {
+      "blake3": "801401398cfe025f84a722ee57745b169c29fc546081ade098b76178c024ffc2",
+      "bytes": 160316
+    },
+    "fonts/title/pressstart2p/OFL.txt": {
+      "blake3": "8086e3c38fd3bcee93ae498ace8ba2201eed537b6832b18d4eed0053fe3b59b5",
+      "bytes": 4413
+    },
+    "fonts/title/pressstart2p/PressStart2P-Regular.ttf": {
+      "blake3": "d94e13ab3619e1f574b90b60a4fc496bd46275cdd76f61e37247124d21ee54ab",
+      "bytes": 118204
+    },
+    "fonts/title/raleway/OFL.txt": {
+      "blake3": "498ece6c16730a9ce272d917c004873768e8df2b5a4710d80803f1a8e5fc5213",
+      "bytes": 4497
+    },
+    "fonts/title/raleway/Raleway-Variable.ttf": {
+      "blake3": "524f535b4d083b328e71fe7d01f492e744b1c79053ac889e48b0eeb82df60640",
+      "bytes": 312352
+    },
+    "fonts/title/righteous/OFL.txt": {
+      "blake3": "7e1cda974e0171d0357e739bd1fc16bc9a588cea9692a1c6fbe1a23091df67bd",
+      "bytes": 4432
+    },
+    "fonts/title/righteous/Righteous-Regular.ttf": {
+      "blake3": "2f544c406f7973e5751a4be64611451b4aa4b31d0cd9263199497c361980b153",
+      "bytes": 43104
+    },
+    "fonts/title/spacemono/OFL.txt": {
+      "blake3": "65e85f3edabae60c52d65c9e1b97f5579118d37a53001c3c398a6b82f9be3d74",
+      "bytes": 4392
+    },
+    "fonts/title/spacemono/SpaceMono-Bold.ttf": {
+      "blake3": "ee68d7716a674569bfecfb8403dd31f72d014e11918596e43c76e44b5ab5bf79",
+      "bytes": 98232
+    },
+    "fonts/title/spacemono/SpaceMono-Regular.ttf": {
+      "blake3": "b389b391b78380243f61515434d6279236648feea63a95ae314b4ac89c7e7d47",
+      "bytes": 99356
+    },
+    "fonts/title/worksans/OFL.txt": {
+      "blake3": "7d2e21f6d90a428a64c400acf7a86c6877086fb34ec657375a116bb6ff0fdbcf",
+      "bytes": 4396
+    },
+    "fonts/title/worksans/WorkSans-Variable.ttf": {
+      "blake3": "642e8c8ad0f4c36c023371d874202cbe746ba598e7134515c836116d05ae03f9",
+      "bytes": 361072
+    },
+    "fonts/ui/Inter-OFL.txt": {
+      "blake3": "54aa13ccba78c48b2b473f52adb37c68dc2bcb4e0c1af88d9e2f147ba0674561",
+      "bytes": 4380
+    },
+    "fonts/ui/Inter-Regular.ttf": {
+      "blake3": "0c6305cd0a7a9f94daac842019537c6727fc0fadd4d44c336ec530317b42a42c",
+      "bytes": 411640
+    },
+    "fonts/ui/Inter-SemiBold.ttf": {
+      "blake3": "05aa7db5ab9f159924625bdf918962d5d780a86791f200e4cd105b5ad8258cde",
+      "bytes": 419744
+    },
+    "luts/arctic.cube": {
+      "blake3": "beb88cc6aaea9f7724d4059597d16913780535ccdb194cd976a0fc33ac7f73ec",
+      "bytes": 118056
+    },
+    "luts/blue-hour.cube": {
+      "blake3": "d1bbba9df9eae0a82efd13b6bb20bf6f4d1ce7d7967c72395ebaa61b10852964",
+      "bytes": 118059
+    },
+    "luts/cool.cube": {
+      "blake3": "9ea371408a35066cfee646c2b88e69a688d3d47e3ae89550a34d1bbc91369e2c",
+      "bytes": 118054
+    },
+    "luts/desert.cube": {
+      "blake3": "7bc2e132dd055da5033f7c5f84569c4dff7cd29b5c1c5b0c63046c83e9a1e2de",
+      "bytes": 118056
+    },
+    "luts/ember.cube": {
+      "blake3": "a515cf2b118b686e3b2b66a9f445f3757201de7230f062defa19a4bba4fd970a",
+      "bytes": 118055
+    },
+    "luts/faded-film.cube": {
+      "blake3": "76fc6a1a9f05f39f48d6d90b9290698547d67875140bf8ed8a2eb7d42224cfe5",
+      "bytes": 118060
+    },
+    "luts/forest.cube": {
+      "blake3": "916026ecaf20029fdb7bf53a4b60b69c42cc5dc7aefa9e04671b2e9f5ddeea27",
+      "bytes": 118056
+    },
+    "luts/golden-hour.cube": {
+      "blake3": "3c1f1cc861ca6b053c7f829feb115423b25ff20fac105650ebb7303426adf838",
+      "bytes": 118061
+    },
+    "luts/harbor.cube": {
+      "blake3": "c53559f6dae163eccc2f5dce63e8076260ae479a5fba179a7cdbdc571bc131b8",
+      "bytes": 118056
+    },
+    "luts/matte.cube": {
+      "blake3": "6e3c290867de23ddad472cf122fe0579f92d59d3ba04699d53dc61f2d68ef8fa",
+      "bytes": 118055
+    },
+    "luts/mono-punch.cube": {
+      "blake3": "7b72a7cb6a2297388196108e344e1e4fb484cb10ec6deca1e0382ee8379d0ce1",
+      "bytes": 118060
+    },
+    "luts/mono.cube": {
+      "blake3": "90bcbfec22cc50527a41a21b97430ee17e0fd281cd6b385908ffe1fe2986680d",
+      "bytes": 118054
+    },
+    "luts/moonlight.cube": {
+      "blake3": "159c55b50a99e0a3101beccb2452738e94457f287b05cc547211df04e4d6223c",
+      "bytes": 118059
+    },
+    "luts/muted.cube": {
+      "blake3": "c837fb0bc0fab37248ad938662857a7b8e13d98e69eed2123134b7442a8d135e",
+      "bytes": 118055
+    },
+    "luts/neon.cube": {
+      "blake3": "5c8249401c7cb8c0e3290f0408db52a4ccd003a69f78b960692e83dd413827a8",
+      "bytes": 118054
+    },
+    "luts/noir.cube": {
+      "blake3": "62209ee594ae05e9dcfd0c283ee674280e59c25cc83bc191907a915102880ffe",
+      "bytes": 118054
+    },
+    "luts/pastel.cube": {
+      "blake3": "6ee4abf471992d4d887c61e0de52683edc78cb20cb2744986c8f6eb7f9210def",
+      "bytes": 118056
+    },
+    "luts/retro.cube": {
+      "blake3": "f4ee2c84cb832a957b24cb2b6ec35c44e0c9bdbb1c1264b2791d5023d6b57d31",
+      "bytes": 118055
+    },
+    "luts/rose.cube": {
+      "blake3": "5020770151aa1c0764f81dd5da4bd6f6e32ff83507a66e9300ef2e70a2017994",
+      "bytes": 118055
+    },
+    "luts/sepia.cube": {
+      "blake3": "f92de8146ea1a2a5e1c21b98237e4566e5c8aa2143324e376150385396c1f2f3",
+      "bytes": 118055
+    },
+    "luts/silver.cube": {
+      "blake3": "83a2f669684fa36fc6eb560a14f9fafa19804a99b3d7ebcd8bc2ce9b2cc20270",
+      "bytes": 118056
+    },
+    "luts/vintage.cube": {
+      "blake3": "4d4da76a6457bcc20b0734d8d4a7469d1027d6d07424ae0b2eccc372344aec3f",
+      "bytes": 118057
+    },
+    "luts/vivid.cube": {
+      "blake3": "2be01a259b862c21c97ed589b1568dee95952264a8fe6c5acb034cf15dfcdc7a",
+      "bytes": 118055
+    },
+    "luts/warm.cube": {
+      "blake3": "0ab602cc8e5e7e617199bb312d83dd1635965c67b72208cc2c0c4c06e459c46a",
+      "bytes": 118054
+    },
+    "sounds/chime.wav": {
+      "blake3": "1849d3c23c15cd12cdb9a0a6b00abd49a3a30063c858a9478f54cf79ab907afb",
+      "bytes": 282284
+    },
+    "sounds/click.wav": {
+      "blake3": "c13699e659bcfc8d34ee512c4500f371cfd53f08ec98778832dc211e867c0bbd",
+      "bytes": 9644
+    },
+    "sounds/ding.wav": {
+      "blake3": "9d928c7b60d1ac1b96df7cab48525777cc6a24ff2b9ba9b163c5e5905a8c6726",
+      "bytes": 268844
+    },
+    "sounds/notify.wav": {
+      "blake3": "514087873f3f8001336cbb1e32172e6114a6d8d263fd62242a428fe08dc400a8",
+      "bytes": 199724
+    },
+    "sounds/pop.wav": {
+      "blake3": "eb19f7ccae69c75eb6843c82beb74f55ba2c088c16333c21cfc82bb4648055a6",
+      "bytes": 34604
+    },
+    "sounds/riser.wav": {
+      "blake3": "8f1b146a43583ba74d94def17714ab10c971e81b78022cc9a934da06567bff85",
+      "bytes": 480044
+    },
+    "sounds/swoosh-down.wav": {
+      "blake3": "ce74d5965815015e64feaeeac787df4da9428f110bfd0239ed6937bbdfb5c3dd",
+      "bytes": 115244
+    },
+    "sounds/thump.wav": {
+      "blake3": "a11c7e25c7cd0124013220424b1d943e7371034542f72dc7012d3761cabf9593",
+      "bytes": 86444
+    },
+    "sounds/whoosh.wav": {
+      "blake3": "f6595023a372688288d2e4e3a6112c0b2d137d312424c5b600bc02fda2c623c5",
+      "bytes": 134444
+    },
+    "stickers/openmoji/00A9.svg": {
+      "blake3": "bcfaabdd91a5c8a057a95abd44baac8e6bd3deae1279c13fbd335be35ffea660",
+      "bytes": 703
+    },
+    "stickers/openmoji/00AE.svg": {
+      "blake3": "8232145f4446061a2110fe269b06397312a67da71797b52ee15db7e25c66cdfb",
+      "bytes": 848
+    },
+    "stickers/openmoji/1F337.svg": {
+      "blake3": "aa3cc0352284de131cb8b1ee2c7f611a33f7a38161d400a167156015c5e50b5d",
+      "bytes": 2860
+    },
+    "stickers/openmoji/1F338.svg": {
+      "blake3": "291dc22b189a6226cb52cb054f5a75eabac6635f138d328d5a2759747b936d1a",
+      "bytes": 3565
+    },
+    "stickers/openmoji/1F339.svg": {
+      "blake3": "f99d077186109871e8a099d74cbdb4f08a15bc3ebb7633d0867c28e4269dba7f",
+      "bytes": 5172
+    },
+    "stickers/openmoji/1F33A.svg": {
+      "blake3": "dfcf09ff29a27c23248cd66fb274ce2855c63b1d6df47eb563a1b788555e6e22",
+      "bytes": 3356
+    },
+    "stickers/openmoji/1F33B.svg": {
+      "blake3": "d7795ecd33b7cdeb8cab652b95bb72a6e2c062123bec4e2e9ded92a4414d38c0",
+      "bytes": 4348
+    },
+    "stickers/openmoji/1F33C.svg": {
+      "blake3": "b5a0ae1d663539c19f05af7cde1cf86606d3746ef06257fa2d5008bbd4dbacc4",
+      "bytes": 3037
+    },
+    "stickers/openmoji/1F345.svg": {
+      "blake3": "4da3f20baed155c267f18a5a8ba04940e2660819d85cf6f9fac56bbe2c9629dd",
+      "bytes": 2162
+    },
+    "stickers/openmoji/1F347.svg": {
+      "blake3": "c865848c1a16dfc41fcfe60316568b7e7e4a3d1b8ad2d0383e1ba7cc70bc3f41",
+      "bytes": 4136
+    },
+    "stickers/openmoji/1F348.svg": {
+      "blake3": "e8896b6d618e984eb425446e595f79f472d2e1a14fc5e4bb7f0b6d2969d940a4",
+      "bytes": 1148
+    },
+    "stickers/openmoji/1F349.svg": {
+      "blake3": "cbeeb3b762b20dc4c6afbc2c4d337f954b83f3f9b4eabe20c8e296aae8e0e437",
+      "bytes": 2848
+    },
+    "stickers/openmoji/1F34A.svg": {
+      "blake3": "95980e78a6546ef31a7e3a01421d8231329846152ad1c42f3087260b7d70f24f",
+      "bytes": 1290
+    },
+    "stickers/openmoji/1F34B-200D-1F7E9.svg": {
+      "blake3": "4233eb693de36fb867aae208e3529b09eaf66c435fd7958b78c3fc7866d583e7",
+      "bytes": 1698
+    },
+    "stickers/openmoji/1F34B.svg": {
+      "blake3": "4ed95c1e6129df9f7e8271c52beacf8722cbe0594548006b43a322821ab885f0",
+      "bytes": 2313
+    },
+    "stickers/openmoji/1F34C.svg": {
+      "blake3": "6a1ce453d3925512986ed423a9350f05c6c82bee6bf566b2e0e4a042cc477ed4",
+      "bytes": 1476
+    },
+    "stickers/openmoji/1F34D.svg": {
+      "blake3": "267a59348b3e9b8a410a7d884804bcbc7c2587de94f23c7136bfd30c0ccdda11",
+      "bytes": 3970
+    },
+    "stickers/openmoji/1F34E.svg": {
+      "blake3": "994853399e5f8b649246f3c329dcab26c08a88d99ee4eb39e99ffcd0e2bde206",
+      "bytes": 2427
+    },
+    "stickers/openmoji/1F34F.svg": {
+      "blake3": "a935aacfeaeedfd4661432e9fa14da53151cc370e576eba326608587cd78a850",
+      "bytes": 3175
+    },
+    "stickers/openmoji/1F350.svg": {
+      "blake3": "ede09fdf8e6a142c5e70ef719ce52416269939531b1dea11356f2374a5510e84",
+      "bytes": 1899
+    },
+    "stickers/openmoji/1F351.svg": {
+      "blake3": "654abea7cfaa561a65933e6ddc4fe49a2048fbc4d5251fb86b920b5bbaf3e0f4",
+      "bytes": 4346
+    },
+    "stickers/openmoji/1F352.svg": {
+      "blake3": "d1a7543ab14410ed581c145e0c07fd30063abad20a9dbb79bf51781c5d92cb01",
+      "bytes": 2168
+    },
+    "stickers/openmoji/1F353.svg": {
+      "blake3": "00476a7d44b77e9184e8d0edf15faff3f7ddb4f149378cd4c0bc2de885e5a188",
+      "bytes": 4226
+    },
+    "stickers/openmoji/1F366.svg": {
+      "blake3": "002c502b06ff9fb59965921808f1710152789199834837fcc4b6eca5345c4dd7",
+      "bytes": 3694
+    },
+    "stickers/openmoji/1F367.svg": {
+      "blake3": "edae0a430c2e0b3f5b9448d7297ee169d95a059095f4c1a87d11d41e6bea8c36",
+      "bytes": 3296
+    },
+    "stickers/openmoji/1F368.svg": {
+      "blake3": "a299d41dfcd0bc683467515babd871b9847cceed73dea9101879ff32ea75485a",
+      "bytes": 2980
+    },
+    "stickers/openmoji/1F369.svg": {
+      "blake3": "9fc620d9ea4fd3b8250aa89a94572e679842f5fb9cf8a0d0f2e45cea3a4bd2a7",
+      "bytes": 4560
+    },
+    "stickers/openmoji/1F36A.svg": {
+      "blake3": "a6f86074028ca7411dcb147fb267064d598c54d56674c781121825eb53a3283f",
+      "bytes": 5233
+    },
+    "stickers/openmoji/1F36B.svg": {
+      "blake3": "fb64797ffa9247357d4b549c36c90669b5d52b764a8272b15488da2f3ccd74e0",
+      "bytes": 1423
+    },
+    "stickers/openmoji/1F36C.svg": {
+      "blake3": "df85bb72799674fbebe65f9557915617f9936e7805f4504e56059a304711dbb8",
+      "bytes": 3165
+    },
+    "stickers/openmoji/1F36D.svg": {
+      "blake3": "ddabf53ff0e151890383ed05ceb69ee05b3f068be240fd623e563d58f19ce4d7",
+      "bytes": 1794
+    },
+    "stickers/openmoji/1F36E.svg": {
+      "blake3": "a773ad51bdbd0638ae84fa4f5076f1ff4666c7ed1afe47d3b637654eed213af9",
+      "bytes": 3209
+    },
+    "stickers/openmoji/1F36F.svg": {
+      "blake3": "429528be787d1dc275b7d6d20f698dae85d2b74f8cf6ce4bc065b1960b9dee35",
+      "bytes": 2278
+    },
+    "stickers/openmoji/1F370.svg": {
+      "blake3": "8d4cafbbf50665b5e3aa7543ae4a9c020937a4f5f19dcdb1078f487df111e007",
+      "bytes": 2171
+    },
+    "stickers/openmoji/1F375.svg": {
+      "blake3": "7a71a7b5b9330ea8b6970eea8d559fcf1cf80d775efc077acf1ab6e5c8789b7a",
+      "bytes": 981
+    },
+    "stickers/openmoji/1F376.svg": {
+      "blake3": "ddd59c8fbe3f05ef23b577aedfa5bc03526167dff4056ca59e8f5085e426ab70",
+      "bytes": 2828
+    },
+    "stickers/openmoji/1F377.svg": {
+      "blake3": "e3c430857109d1557409d1c4b2cd12977c12c4bddffd56531e3c87dc6e5ec8e9",
+      "bytes": 1192
+    },
+    "stickers/openmoji/1F378.svg": {
+      "blake3": "b5857e16b44863f40f527a337d7a47e94beec42ced8688b9762a083407dece9b",
+      "bytes": 1633
+    },
+    "stickers/openmoji/1F379.svg": {
+      "blake3": "8f026afb5e88835d1c12fe9a6d6d6e2cd9015a776be7c2f0de1cb4005ea79eee",
+      "bytes": 1809
+    },
+    "stickers/openmoji/1F37A.svg": {
+      "blake3": "fd30ba540bdd176954a674198981d8b5f4748ec825b0d5b087f087a7058df561",
+      "bytes": 3281
+    },
+    "stickers/openmoji/1F37B.svg": {
+      "blake3": "9166debd708fbeea33d611e5ec97d13eaa598eeb84eae5fe8f0c6e790ce9107b",
+      "bytes": 6846
+    },
+    "stickers/openmoji/1F37C.svg": {
+      "blake3": "f98041b4e4096d5a98b394b83d8c8d02895a0a67d06356d5666954066ee2f467",
+      "bytes": 3420
+    },
+    "stickers/openmoji/1F37E.svg": {
+      "blake3": "5c6bd637a58d6d5b974cb15359b53dfb4740b179631f41852f0d9ed844a22c27",
+      "bytes": 4632
+    },
+    "stickers/openmoji/1F380.svg": {
+      "blake3": "6e68a590202b21f37b96a8920ce5d7ca25d2abede50eec6ba085572df434595f",
+      "bytes": 5731
+    },
+    "stickers/openmoji/1F381.svg": {
+      "blake3": "0ef2aa5bcffe1890ade12c8d7454e3ae5ed4fca1cba1a5b2969b09582d30bafe",
+      "bytes": 3138
+    },
+    "stickers/openmoji/1F382.svg": {
+      "blake3": "61eb556e7979af574a670798deecedc133ef52944ddf5808848dc4ab3253d6a1",
+      "bytes": 3913
+    },
+    "stickers/openmoji/1F383.svg": {
+      "blake3": "498779d22bc9e73d636ef0ff5d012fe01a17f485ea3a5df21c21bb2e70b7a017",
+      "bytes": 2386
+    },
+    "stickers/openmoji/1F384.svg": {
+      "blake3": "70032e0e29647aed2995f16b2fec24ea6f2124ac77539196231d51bbbb387b82",
+      "bytes": 2847
+    },
+    "stickers/openmoji/1F386.svg": {
+      "blake3": "7a2522e9cbbe1aae6b0bc3916445e3cdcaf75fbdca77c03ba6d873c37859a965",
+      "bytes": 6682
+    },
+    "stickers/openmoji/1F387.svg": {
+      "blake3": "9c2ff84bf8ce5ba94a0f7e2ad662e687cc63852320487e6be2634fe4e2406ac1",
+      "bytes": 7004
+    },
+    "stickers/openmoji/1F388.svg": {
+      "blake3": "93a1f2af369ee3111ee4edba6005a12bff49cdfdd3759de416a5ebc2eab3babe",
+      "bytes": 1495
+    },
+    "stickers/openmoji/1F389.svg": {
+      "blake3": "b80600789a7f12b2384f69cde34320d87097337ef977b57a9c31c92f04b09425",
+      "bytes": 2725
+    },
+    "stickers/openmoji/1F38A.svg": {
+      "blake3": "7990cc474340da72d14df193dd80272708370cc2ebc0121226931f13334a262c",
+      "bytes": 3126
+    },
+    "stickers/openmoji/1F38B.svg": {
+      "blake3": "e5b79076d85d6de4408a1de293ded3836ad8e98bb2c057d34088785c170a2563",
+      "bytes": 6906
+    },
+    "stickers/openmoji/1F38D.svg": {
+      "blake3": "12d1fb19d17badef9162609eebfa6c1c645d80d83f85aa76e3e33895793bbe55",
+      "bytes": 7428
+    },
+    "stickers/openmoji/1F38E.svg": {
+      "blake3": "9864d7dd5eb7f8a4afa125919130946347e7057d2178db0ad3fb5372372c12da",
+      "bytes": 8746
+    },
+    "stickers/openmoji/1F38F.svg": {
+      "blake3": "4d2d87b75052e5633ab0c5dfe87e267d2045ccdcc5ab413f77a19c551e607990",
+      "bytes": 2681
+    },
+    "stickers/openmoji/1F390.svg": {
+      "blake3": "69969e0d9c98b8a086ab085215f4a9c08de76c75e3d118085a8c9e3f9fbdf2ad",
+      "bytes": 1300
+    },
+    "stickers/openmoji/1F391.svg": {
+      "blake3": "36445b19e9cad3b4b3939afac4f3ed915b68d13f56ab0eec3b0fb8abafca2e1d",
+      "bytes": 9994
+    },
+    "stickers/openmoji/1F396.svg": {
+      "blake3": "3cf594034c13949cb82ae122bc0f315b0d0f17e6e459d7508180db51c403e881",
+      "bytes": 1947
+    },
+    "stickers/openmoji/1F397.svg": {
+      "blake3": "909571e107894e0f7a88af769b0eed6a54f78093f05681da15925fa6992a6863",
+      "bytes": 1414
+    },
+    "stickers/openmoji/1F399.svg": {
+      "blake3": "cced018cbc2a9fb43f0bc47318c313b12a5885ff3a49df5a3962f9fcc051a732",
+      "bytes": 3574
+    },
+    "stickers/openmoji/1F39A.svg": {
+      "blake3": "ee4c0e17f320007979add88931ab6bca42f635e2bc02299b5aa465dae0368665",
+      "bytes": 5511
+    },
+    "stickers/openmoji/1F39B.svg": {
+      "blake3": "7484e783793b4867ef1996a6d5889845b789bf0594461e76ef6ef0eeef754d50",
+      "bytes": 4133
+    },
+    "stickers/openmoji/1F39F.svg": {
+      "blake3": "024e2bc3349464fab29ad39ab4645b3687dd9f680e45d0317e9d5745b66f94f0",
+      "bytes": 937
+    },
+    "stickers/openmoji/1F3A4.svg": {
+      "blake3": "9df6838126bf95123fba99cdda848f46a5bb23af6c5abeadaad5f33787d807f9",
+      "bytes": 3265
+    },
+    "stickers/openmoji/1F3A7.svg": {
+      "blake3": "08cf03ec6e39204853b28e2ff040c0c7fa908d368fce22f8816b08af5e89e49e",
+      "bytes": 2858
+    },
+    "stickers/openmoji/1F3AB.svg": {
+      "blake3": "196282ba1e4c319205d4aa4a3d7913a4edce35277775c888e9a3d15dd13bd55c",
+      "bytes": 1313
+    },
+    "stickers/openmoji/1F3B5.svg": {
+      "blake3": "2ceecc222d5709c7fd9720318b4ebaff9efd4a45bc2cf31701599b6b0c8c85c5",
+      "bytes": 1349
+    },
+    "stickers/openmoji/1F3B6.svg": {
+      "blake3": "2eb5e13df8109beeffd842862a70c5aeed525c94bf858794748496e487197028",
+      "bytes": 1476
+    },
+    "stickers/openmoji/1F3B7.svg": {
+      "blake3": "e640e2a6931a7381656ea55fd7c37a7e8d2739815be1c1ef3ab31ad1fa0b86f7",
+      "bytes": 2764
+    },
+    "stickers/openmoji/1F3B8.svg": {
+      "blake3": "21240afa85c852e8a3e6631ddb4717c481894c589eba23cbe4a91d21fdbf0b54",
+      "bytes": 3425
+    },
+    "stickers/openmoji/1F3B9.svg": {
+      "blake3": "1876696996ef8b0d6e4e0b7a8fea210bc895d46cef4fec560f9eb58dff28cdde",
+      "bytes": 1847
+    },
+    "stickers/openmoji/1F3BA.svg": {
+      "blake3": "943228c89d9aa7b1e2c2b9ce6f6ca06ca369aac5d9faddf5ca1dea9641068957",
+      "bytes": 4851
+    },
+    "stickers/openmoji/1F3BB.svg": {
+      "blake3": "015da6776aa1050b9431539bd9b56108990007019c45ddf5bd27b1406732a9ac",
+      "bytes": 4445
+    },
+    "stickers/openmoji/1F3BC.svg": {
+      "blake3": "84789f976f3e4bc2b412342c2dde8676f4255dc7b44cedbdc1895cc713bce5cb",
+      "bytes": 1020
+    },
+    "stickers/openmoji/1F3C5.svg": {
+      "blake3": "f22b568be45dbb2c044790e042e2ef55f1ec19553955d51906dfeeb07da13521",
+      "bytes": 3496
+    },
+    "stickers/openmoji/1F3C6.svg": {
+      "blake3": "1e07288e8e4b7016ed42202d30c9fccd524942f554ce42c5513e9c303bef5f3a",
+      "bytes": 2270
+    },
+    "stickers/openmoji/1F3F5.svg": {
+      "blake3": "7f678489b4ddf1c69504041a0bb09d98ea2cd6cdd82bc1c4d8557a9edfe2e0c1",
+      "bytes": 2633
+    },
+    "stickers/openmoji/1F400.svg": {
+      "blake3": "c223eea4e0f31eb4728f334b2d2f5942f0da44e91d204f71e4e6e5e16ef367ed",
+      "bytes": 3555
+    },
+    "stickers/openmoji/1F401.svg": {
+      "blake3": "d59b8dec976df3af3968a4d809f958ffd7cadd20e867f408d6c8abe2d4c0118c",
+      "bytes": 4007
+    },
+    "stickers/openmoji/1F402.svg": {
+      "blake3": "cd6a2b38fb4db3959d63927da66135069638ffebf5e6c086ac86a67b52b6167e",
+      "bytes": 3722
+    },
+    "stickers/openmoji/1F403.svg": {
+      "blake3": "ccef98fa3c6fbbd7236930fcfb2c3f1556b3a4eb96dea6b818c63be9d37b60b2",
+      "bytes": 4978
+    },
+    "stickers/openmoji/1F404.svg": {
+      "blake3": "d501353c88c261beb70617b2fd233c76826528c9b5b666f63088e2d974e94090",
+      "bytes": 4774
+    },
+    "stickers/openmoji/1F405.svg": {
+      "blake3": "f70dccb7dad2ebd004c8082cdfca4559d81d7ae0b0636f53687079d81292a9cb",
+      "bytes": 7405
+    },
+    "stickers/openmoji/1F406.svg": {
+      "blake3": "e74600c879112bf50a5fcb433019c66253f7eb856c8c96218e41ea88dd4b124c",
+      "bytes": 7663
+    },
+    "stickers/openmoji/1F407.svg": {
+      "blake3": "efde64e8b0420aad2fb873a55ed3437f985d863f9cfece77df28657b8fd3db4a",
+      "bytes": 4683
+    },
+    "stickers/openmoji/1F408-200D-2B1B.svg": {
+      "blake3": "ca9c682ecb5673563902953dd298794ff37ceafca52010bdd07e2f5fd5cc6ac2",
+      "bytes": 4783
+    },
+    "stickers/openmoji/1F408.svg": {
+      "blake3": "aead12d32175aca983bb992c531f07b670fb4b4fb40ca12807cda8bd69b7f136",
+      "bytes": 4277
+    },
+    "stickers/openmoji/1F40B.svg": {
+      "blake3": "431adcd7cb745cff44253a19cfcb46f8454e5932bcde92132998ce7ee99cea5f",
+      "bytes": 3067
+    },
+    "stickers/openmoji/1F40E.svg": {
+      "blake3": "c787b4fdce543de95f4093d356febe333d3cc9d5deb1192b639a2c637e4b1fb1",
+      "bytes": 4593
+    },
+    "stickers/openmoji/1F40F.svg": {
+      "blake3": "cd68f39cfea991c0d1fb847a98c5c666621d80ea62823bf7a0c9566936d3a7ca",
+      "bytes": 5531
+    },
+    "stickers/openmoji/1F410.svg": {
+      "blake3": "5a78ca7251a97400f1efa51033da71b16948633bd14858bd02d4aea8ab21fc12",
+      "bytes": 3656
+    },
+    "stickers/openmoji/1F411.svg": {
+      "blake3": "fac00eec5f3bf1694f80380fec90cc04792c9228e845f0c1564145881ce5a943",
+      "bytes": 6409
+    },
+    "stickers/openmoji/1F412.svg": {
+      "blake3": "dccf59f0fe1566a5c2c2a85acee7ebd99b2ab46b4a4b6b6e72293221c75f7a9b",
+      "bytes": 6379
+    },
+    "stickers/openmoji/1F413.svg": {
+      "blake3": "b6bb90f3095f689ecfa04e00e604da33bfa2da42def4468342c9bb48ac750aef",
+      "bytes": 3520
+    },
+    "stickers/openmoji/1F414.svg": {
+      "blake3": "e99b0d740af3f441bdaf49e1147288b8320aeaa9c2bdf85635c2cb59282ee6df",
+      "bytes": 1129
+    },
+    "stickers/openmoji/1F415-200D-1F9BA.svg": {
+      "blake3": "68ef8af5eb026402f27635a22ea3cf61e6c6a8d5f09b7b02b4f2c728f23486fa",
+      "bytes": 6558
+    },
+    "stickers/openmoji/1F415.svg": {
+      "blake3": "e32947c99557ae1c06d1c4fc88b040fb9288b82d96eb29ffa3f269fbea5344e1",
+      "bytes": 5377
+    },
+    "stickers/openmoji/1F416.svg": {
+      "blake3": "40c98e3bbf7b1be35e3f2c7bfafd83b99183822c562ce373be62b316efe98264",
+      "bytes": 3043
+    },
+    "stickers/openmoji/1F417.svg": {
+      "blake3": "9c639b42b0190e8e32522547baf14e87066f7e76b92a25a7dbcfe62a99c6724a",
+      "bytes": 4134
+    },
+    "stickers/openmoji/1F418.svg": {
+      "blake3": "ec99c924ee0426f94feabe8c538b0e84b9a9cccba6d5a767008064a459533e64",
+      "bytes": 4368
+    },
+    "stickers/openmoji/1F419.svg": {
+      "blake3": "089e7d7b79b6f41da8359056a4a801905bffc2d85af16862e999b13ca4c144f6",
+      "bytes": 2426
+    },
+    "stickers/openmoji/1F41A.svg": {
+      "blake3": "95005b1552b00b0184562d3af8097880f22583cfac24ca2010c2e8090a8b4bc1",
+      "bytes": 1110
+    },
+    "stickers/openmoji/1F41F.svg": {
+      "blake3": "cbec1b913a244d823ccab9ffc2733e6ed3f4ff770ee124c1720e9ebae0cef734",
+      "bytes": 1266
+    },
+    "stickers/openmoji/1F420.svg": {
+      "blake3": "ccbd971908391d6b2581c5b3a547d4358dae3bccd6518fb0cb1f3e4491518255",
+      "bytes": 2834
+    },
+    "stickers/openmoji/1F421.svg": {
+      "blake3": "86cd99298dc4ac868894baca59ad9637690cfdce61a4dc8b35bb6ffdab1ea70e",
+      "bytes": 4935
+    },
+    "stickers/openmoji/1F423.svg": {
+      "blake3": "a60aff347d810809289f79dc8dab6eefff2e0f09eebadd8ab7ffb480e2128748",
+      "bytes": 2612
+    },
+    "stickers/openmoji/1F424.svg": {
+      "blake3": "99009240150b59e864ec20868f276f07af4295ebaeac178f0ec386a26830ab52",
+      "bytes": 1936
+    },
+    "stickers/openmoji/1F425.svg": {
+      "blake3": "0c721b053bde479482f8e7a464ecd9e08879f2d139c143bf204483e45fde4006",
+      "bytes": 2388
+    },
+    "stickers/openmoji/1F426-200D-1F525.svg": {
+      "blake3": "fcecf948ebad0453d7fc115939ea5debf0743aa3206c7df09161cdd220ff2589",
+      "bytes": 3226
+    },
+    "stickers/openmoji/1F426-200D-2B1B.svg": {
+      "blake3": "d2e121e6fd574524d0dffb7f962230aea6bb909acb13580a4dfa007176cd290b",
+      "bytes": 1408
+    },
+    "stickers/openmoji/1F426.svg": {
+      "blake3": "9243ccadf95712e891e8ccb44c01d6d9b4e2af2cb074d3f2b764330fc01bdd63",
+      "bytes": 1686
+    },
+    "stickers/openmoji/1F427.svg": {
+      "blake3": "4dd37da9f65edcd8301f1fb717525418c9227a6bc86b12ad0fd9b04a46211d99",
+      "bytes": 2941
+    },
+    "stickers/openmoji/1F428.svg": {
+      "blake3": "3ef7a25c0f3ab634d438fe9783515b49fbfc23375f42259ede5c89863b284eab",
+      "bytes": 3480
+    },
+    "stickers/openmoji/1F429.svg": {
+      "blake3": "48350c58b7a4ec5017f743a30f8fdea128e2761b8fdadf9d27d24719a5b303a9",
+      "bytes": 3725
+    },
+    "stickers/openmoji/1F42A.svg": {
+      "blake3": "159acd708951e3bf1d849f6501f3c1f0a5c4d2c98dda63efc6325bba5c70b373",
+      "bytes": 3156
+    },
+    "stickers/openmoji/1F42B.svg": {
+      "blake3": "89f9af40b23d40703bb739149281b9061b6a19b9da2dbf4e97db4a6238082ee9",
+      "bytes": 4560
+    },
+    "stickers/openmoji/1F42C.svg": {
+      "blake3": "4fabd239cdbee8af7d502df8713ffa68e2a45a0521eccb991cef6befd281d08a",
+      "bytes": 2932
+    },
+    "stickers/openmoji/1F42D.svg": {
+      "blake3": "4bd7734772aa849456898f1efdccaeef3fcf8c38632a354460eed295dbe2ba97",
+      "bytes": 3844
+    },
+    "stickers/openmoji/1F42E.svg": {
+      "blake3": "13ed7d87be414ba82f65176ffeea0ab6c868b1f0e90e8a2419ece9d70b5cdcee",
+      "bytes": 5312
+    },
+    "stickers/openmoji/1F42F.svg": {
+      "blake3": "e91a96b4897fe678c638306f9eded0466907cdafce2917731d58dcb39c8a0427",
+      "bytes": 5228
+    },
+    "stickers/openmoji/1F430.svg": {
+      "blake3": "5d22c3b4baa9e54d6c4cc59ce234cd4faf6fe1b4994dabb355c58b7db82b38b5",
+      "bytes": 2875
+    },
+    "stickers/openmoji/1F431.svg": {
+      "blake3": "b61b1680bad81766f233aab685dbc6d62f7ed279da236b29a8c66ccfba07ad33",
+      "bytes": 3031
+    },
+    "stickers/openmoji/1F433.svg": {
+      "blake3": "e1f189e08a426deb40cd6a89f0ebc403f3e944f651f6acd8fd9b4f02cfb58b02",
+      "bytes": 7397
+    },
+    "stickers/openmoji/1F434.svg": {
+      "blake3": "4d39096de06770f6287a1ff3a4146d491465ca1a04dd28c36158c3180d85fe95",
+      "bytes": 2678
+    },
+    "stickers/openmoji/1F435.svg": {
+      "blake3": "87c7b75b496eec7e8ea9085849228ab104151c60dd6b6bc11ad21b79aa8d03ab",
+      "bytes": 4653
+    },
+    "stickers/openmoji/1F436.svg": {
+      "blake3": "3548f6193d409d72da8a313128861e76e2e419ecbd4e244463fd9fba72552be4",
+      "bytes": 3328
+    },
+    "stickers/openmoji/1F437.svg": {
+      "blake3": "4a5a89645624e1483d2e2edde4ee2897e26140a6d484edb0e9b5b655ca7c91b8",
+      "bytes": 4988
+    },
+    "stickers/openmoji/1F439.svg": {
+      "blake3": "239a68739977d45cae6f8e78e99c91f1a7cb7638d083847b2ded81f266339fa4",
+      "bytes": 3250
+    },
+    "stickers/openmoji/1F43A.svg": {
+      "blake3": "ec29f696ce1659cd326b9f6889a3e5974c90d25af994eda7a518ebdb72cec422",
+      "bytes": 5336
+    },
+    "stickers/openmoji/1F43B-200D-2744-FE0F.svg": {
+      "blake3": "89ac63ec03d9174e4622acec1ba9157cf9f1860d67adafe16169969b60807758",
+      "bytes": 2960
+    },
+    "stickers/openmoji/1F43B.svg": {
+      "blake3": "eadbf7b698945d94cee54f660455c84c50c5d2880f4081c2f627ff714ab847b5",
+      "bytes": 3177
+    },
+    "stickers/openmoji/1F43C.svg": {
+      "blake3": "2e6850dbe423372c1880457afd41593b3dfd10558db95057577a8c6c783f8b89",
+      "bytes": 3892
+    },
+    "stickers/openmoji/1F43D.svg": {
+      "blake3": "67df8f3864c84efe2e59a2e0890600e91ff89c077f5e191976a7b00f6e269c0a",
+      "bytes": 1873
+    },
+    "stickers/openmoji/1F43E.svg": {
+      "blake3": "553ac42965fe27efdcc5ec084ff7efb544cfa23af183215d71dc236b06b4c017",
+      "bytes": 5019
+    },
+    "stickers/openmoji/1F43F.svg": {
+      "blake3": "bc60509d98d2cc47f4cdd9da8e827a9d7969589804956e21c94e201ee3f800e3",
+      "bytes": 4211
+    },
+    "stickers/openmoji/1F441-FE0F-200D-1F5E8-FE0F.svg": {
+      "blake3": "9b28fef06e7242714e3dbc2b27d310d5b548469ac97f5d79fe6c5876916d924e",
+      "bytes": 1180
+    },
+    "stickers/openmoji/1F446.svg": {
+      "blake3": "2be4d4afe9b136a7f85d6c072c5257a8aab0031a4ae46bbec1fc8dde3a8b3d0a",
+      "bytes": 4156
+    },
+    "stickers/openmoji/1F447.svg": {
+      "blake3": "5b607bd0e284e27bf0075e271ac8b6559d50d7faa56a1e12b24d205377f1b0f0",
+      "bytes": 3827
+    },
+    "stickers/openmoji/1F448.svg": {
+      "blake3": "ff357d78c979d65ddefe4e21eaf632bc95e9f906ed53148eb4d720db20b2ac7f",
+      "bytes": 7408
+    },
+    "stickers/openmoji/1F449.svg": {
+      "blake3": "2459e13fe396a68ca05476ae3147e9d3626b5583444b74db375b0c773ab1c10a",
+      "bytes": 4761
+    },
+    "stickers/openmoji/1F44A.svg": {
+      "blake3": "2a430250c7a7b235a4f0c3f2aea7a5b63037bd82c4bddcc20c1ca5edb8dad21e",
+      "bytes": 3701
+    },
+    "stickers/openmoji/1F44B.svg": {
+      "blake3": "f73f3a156e172e370b17fca5969cb425b6f1dd6a210f122b1edc77345389b58d",
+      "bytes": 2802
+    },
+    "stickers/openmoji/1F44C.svg": {
+      "blake3": "cb0a78827cb1c2746cced0daf2456448d45a292eac1f51b4f73b575f2e86451f",
+      "bytes": 3580
+    },
+    "stickers/openmoji/1F44D.svg": {
+      "blake3": "0e0fe84e8f45def13cc52b5431f8f229dcb2a2d7e85ca0fe78fdfb12f6066567",
+      "bytes": 2473
+    },
+    "stickers/openmoji/1F44E.svg": {
+      "blake3": "5892eb3e0781c905f456b4b2ddd2af8888a9a9ef9b6201187dc2a0e5c6672553",
+      "bytes": 2474
+    },
+    "stickers/openmoji/1F44F.svg": {
+      "blake3": "725b3f90d372bc73e92cc2262b3d29069cb4a138aa488c123e2dfe0ee804d95c",
+      "bytes": 6962
+    },
+    "stickers/openmoji/1F450.svg": {
+      "blake3": "4096ab9f5cd3d399e8ba3626e2c97d1d33e705ece4bbdea9be1c3b2e92d35979",
+      "bytes": 4065
+    },
+    "stickers/openmoji/1F479.svg": {
+      "blake3": "ce3beca2f917c850519e8ce0634082066a37624866abad55c9025bd79739fc3b",
+      "bytes": 5107
+    },
+    "stickers/openmoji/1F47A.svg": {
+      "blake3": "8d461aa4156fd1690fa11f9e53a5571cc993b94a596b9a57265fdaf4c1658b09",
+      "bytes": 3746
+    },
+    "stickers/openmoji/1F47B.svg": {
+      "blake3": "df221dd475379d6ca4505422020d4d51ab9676ea390838dd100ae49ddb3b0823",
+      "bytes": 2895
+    },
+    "stickers/openmoji/1F47D.svg": {
+      "blake3": "3855a4e0edbbc7a88ad42175242bba7b2099b3954e769c059ac83e2730246475",
+      "bytes": 2272
+    },
+    "stickers/openmoji/1F47E.svg": {
+      "blake3": "ee9ee5aafec242343d5bda1bf9b95a89c3bf2a67ea6a3003f01978be846b7177",
+      "bytes": 3835
+    },
+    "stickers/openmoji/1F47F.svg": {
+      "blake3": "71202b746667702283bdb1fbfa66e763fb6158287ffe6c99f27736620bd310d6",
+      "bytes": 1692
+    },
+    "stickers/openmoji/1F480.svg": {
+      "blake3": "691737d587f6fc01d94c3da3fd27bf10642e1413dfb4477b67ee68b7e9152d45",
+      "bytes": 2706
+    },
+    "stickers/openmoji/1F48B.svg": {
+      "blake3": "fde6e8da13cc12277d74cd124432353c780eef8cc4ba0ba5d9030a00efb73dc2",
+      "bytes": 2996
+    },
+    "stickers/openmoji/1F48C.svg": {
+      "blake3": "8cf500a91799f666fc62d0b172d2faa037d9758450cc5e608e73ba2434393483",
+      "bytes": 1793
+    },
+    "stickers/openmoji/1F490.svg": {
+      "blake3": "c1acbe94ca58a1bbca73d9c3272f44452b1700b62d52b40678e5085e3243d092",
+      "bytes": 7673
+    },
+    "stickers/openmoji/1F493.svg": {
+      "blake3": "c201da017ae843aa151052b5726fa62298362af85900d917c0e06c228708e468",
+      "bytes": 1399
+    },
+    "stickers/openmoji/1F494.svg": {
+      "blake3": "31ff1c35c48e9f0a7a0dffa0cd1886dafd6ecf48a5f26e6a0eb0b71ca57dcc14",
+      "bytes": 1436
+    },
+    "stickers/openmoji/1F495.svg": {
+      "blake3": "27a7682301144b777aa50e86370da593becdb7b246920955f39a5d47f061e97f",
+      "bytes": 1700
+    },
+    "stickers/openmoji/1F496.svg": {
+      "blake3": "4114edc815b174560501b3ec0d6f350135531de63fe12eca705c0aeca1bd5416",
+      "bytes": 3066
+    },
+    "stickers/openmoji/1F497.svg": {
+      "blake3": "ba56d5377233f5e3527fc917d7b7405eb2ad2501796b3a8ac8f0c65ce86f7a95",
+      "bytes": 1920
+    },
+    "stickers/openmoji/1F498.svg": {
+      "blake3": "c32c677d1525cfb9b8a5971090acd68550b9e0c23d5695ff37f0a26afe1c05b9",
+      "bytes": 1904
+    },
+    "stickers/openmoji/1F499.svg": {
+      "blake3": "6b627aafc1fa61aa38eaa7537930319fd9b27a4099724e5da78039624afbc1b6",
+      "bytes": 879
+    },
+    "stickers/openmoji/1F49A.svg": {
+      "blake3": "60df432cbd5365864107e93a511e7a6641496be05ab2367b989d07a37684f6d2",
+      "bytes": 911
+    },
+    "stickers/openmoji/1F49B.svg": {
+      "blake3": "e77e83fbbdd49077ad6ef6525b372814069f063e73b7e29d0f50de75a49cf25d",
+      "bytes": 911
+    },
+    "stickers/openmoji/1F49C.svg": {
+      "blake3": "47fafc2dd0be1344f8fa701b1694bf1b866c88fdbdeb986a9e736e203cc81f9c",
+      "bytes": 789
+    },
+    "stickers/openmoji/1F49D.svg": {
+      "blake3": "943bdd8259fdd1d0fb4ae71d5afe3f6d72783eaedb66018e63a5043d805def47",
+      "bytes": 5236
+    },
+    "stickers/openmoji/1F49E.svg": {
+      "blake3": "f67942b550cd2da431d98170f9258758a97eb82dd26b81371580d2b97adfee08",
+      "bytes": 2039
+    },
+    "stickers/openmoji/1F49F.svg": {
+      "blake3": "618b821e9633c29044ec8f70c99b5f1bb5103b5f7aac923b806d8f5cc8caa613",
+      "bytes": 1029
+    },
+    "stickers/openmoji/1F4A2.svg": {
+      "blake3": "379d3263b6c30203e54f9b91d53f328760cf898511f2bb3e0275e8f016d57d2a",
+      "bytes": 2500
+    },
+    "stickers/openmoji/1F4A4.svg": {
+      "blake3": "476e15e704733a50bed095a63169cbb972d10a3f92418609f4c0fd8029b54711",
+      "bytes": 724
+    },
+    "stickers/openmoji/1F4A5.svg": {
+      "blake3": "b4b840901ba4fe8eedce5f581f53f5edd2d2a1ab374652cb66bfdd57fa77da94",
+      "bytes": 3676
+    },
+    "stickers/openmoji/1F4A6.svg": {
+      "blake3": "414bee4def9e36f6c01ea8753b11c230308a07528b68ea90bd655970c0d286ba",
+      "bytes": 4585
+    },
+    "stickers/openmoji/1F4A8.svg": {
+      "blake3": "4cf21126e2b0973432425f27ec5e46e4032319b4e6c1e5ff7f0f546722690cb7",
+      "bytes": 2703
+    },
+    "stickers/openmoji/1F4A9.svg": {
+      "blake3": "675c22c0cd19d6bca101ae54a0b7e39ed7c08f01c70dd3763dd75679ea11ff6d",
+      "bytes": 2904
+    },
+    "stickers/openmoji/1F4AB.svg": {
+      "blake3": "29c6fe8296fdf74e88e861cfac272ffe97dc15f480c3074ec588aacd8572f1ed",
+      "bytes": 1233
+    },
+    "stickers/openmoji/1F4AC.svg": {
+      "blake3": "320bf0da3016b708d69155238e82a4c2f4e75e85a42dc995174bec90a9b2841e",
+      "bytes": 1199
+    },
+    "stickers/openmoji/1F4AD.svg": {
+      "blake3": "d40134f5b30c515bd50a6f04b9a276267a72e86d5227197c3437b140ffa03488",
+      "bytes": 2176
+    },
+    "stickers/openmoji/1F4AE.svg": {
+      "blake3": "20855f5c45f03a328bc847d6a9eb229e81ceb018b01176f2730bc964cad6ab92",
+      "bytes": 4743
+    },
+    "stickers/openmoji/1F4AF.svg": {
+      "blake3": "d2bd7a88ddd04231edbdb3becef813faba01ef76424e3259b0f33a67b0cb1b21",
+      "bytes": 2701
+    },
+    "stickers/openmoji/1F4DB.svg": {
+      "blake3": "7171403a91021595827658c9e2c9853f4c84f8796a4d8276706b7968627af239",
+      "bytes": 1139
+    },
+    "stickers/openmoji/1F4FB.svg": {
+      "blake3": "304e6beb506646d90648cbcf358cd588e372c201f015ed0befbb2697aa97e6a2",
+      "bytes": 2844
+    },
+    "stickers/openmoji/1F530.svg": {
+      "blake3": "9abc88da17d5654837e371b7dabc38d444127558fe233d4459cb0bb7f328f589",
+      "bytes": 809
+    },
+    "stickers/openmoji/1F531.svg": {
+      "blake3": "e478900cf46b2b8c0329e8182b6bd454c0de719db8e49e0663672c82c103215d",
+      "bytes": 2185
+    },
+    "stickers/openmoji/1F54A.svg": {
+      "blake3": "2862266b189e2390f6368527d96013c8a938f0ea917a7c88f139fac01ace3ea7",
+      "bytes": 1595
+    },
+    "stickers/openmoji/1F573.svg": {
+      "blake3": "1ee3fea332fc1e3f135ddfced380e92e3c2cd2f4dd7aab4c35499a55ece032e2",
+      "bytes": 885
+    },
+    "stickers/openmoji/1F590.svg": {
+      "blake3": "0ce31f66c4e6e130042200fbba360db387fd7fbf8949b5b0b7c41684582f186a",
+      "bytes": 1755
+    },
+    "stickers/openmoji/1F595.svg": {
+      "blake3": "52458ddd4cfb17e1ef765dcce9fec0f0c0d6cb5d145bdc558350f78067980e9a",
+      "bytes": 2259
+    },
+    "stickers/openmoji/1F596.svg": {
+      "blake3": "311e7fc43a08997d8530a166bf3c51a2733c03ef4bafb6d30910bd8e38dee0cd",
+      "bytes": 2717
+    },
+    "stickers/openmoji/1F5A4.svg": {
+      "blake3": "d6ab13a352322be4cdad396e0c7c980fff4f1afcfeef8a6aebf6188d9045ec7c",
+      "bytes": 879
+    },
+    "stickers/openmoji/1F5E8.svg": {
+      "blake3": "cd2102e8285b0c09ca63507b73d663b3cda8e383ace5df38bfa4d1e5100984c7",
+      "bytes": 886
+    },
+    "stickers/openmoji/1F5EF.svg": {
+      "blake3": "1971c74acbea7506226d7dc226445982c141948754f3ac07769ab9c7f29dc945",
+      "bytes": 1884
+    },
+    "stickers/openmoji/1F600.svg": {
+      "blake3": "98b943d277021d7814a1722e1781051aea29265970ac9d4dd37248aee94f9a09",
+      "bytes": 1439
+    },
+    "stickers/openmoji/1F601.svg": {
+      "blake3": "7aef6ff14a6bed7896addcbc23c1c5f2f367a0d16d7a2ee5c1aa71b9cc265149",
+      "bytes": 1429
+    },
+    "stickers/openmoji/1F602.svg": {
+      "blake3": "7e01260d09b62e7e89645657a807452d7127a6f92f0c70499c4bffee95995de6",
+      "bytes": 2880
+    },
+    "stickers/openmoji/1F603.svg": {
+      "blake3": "9e771212f728e23bd9f9aa4955f09660c2c66a0eec2eaf6a35a92a241bc17832",
+      "bytes": 1249
+    },
+    "stickers/openmoji/1F604.svg": {
+      "blake3": "1c845d39e7aa25217a997ad73466ad1484d3b1745fe26b7da2529f68f009c698",
+      "bytes": 1432
+    },
+    "stickers/openmoji/1F605.svg": {
+      "blake3": "28263bcdb4bf861cc689f132876a441cf3e3f8ddde684ca824a6e8113d2c8d29",
+      "bytes": 1889
+    },
+    "stickers/openmoji/1F606.svg": {
+      "blake3": "3bcf0e3a14c5f6f6001287952433938ff146bf08d3aefcb2facc582792c4a864",
+      "bytes": 1444
+    },
+    "stickers/openmoji/1F607.svg": {
+      "blake3": "434ae3a54a57e4d5d91ad87605420b6abbbd05234b785884c4fb9699766a8f7b",
+      "bytes": 1329
+    },
+    "stickers/openmoji/1F608.svg": {
+      "blake3": "af53275de5c792993ba77b7586a1d6ebb7723fe8cbc6a1ca4d197db222a24d1f",
+      "bytes": 1693
+    },
+    "stickers/openmoji/1F609.svg": {
+      "blake3": "ee9ee9fd779452aeaf642e610d2fcd8987e26e1c557cca9ecc4aed982465c6b8",
+      "bytes": 1508
+    },
+    "stickers/openmoji/1F60A.svg": {
+      "blake3": "bcb8e2135edc7646c2d0041aa4c526bc5d7fd3e5d9071c252cb38a6dbaf47bb8",
+      "bytes": 830
+    },
+    "stickers/openmoji/1F60B.svg": {
+      "blake3": "d2b034534dc0284e9eaccbdac78a4373acdc5114ffcf71284ad763702ed54c12",
+      "bytes": 1551
+    },
+    "stickers/openmoji/1F60C.svg": {
+      "blake3": "17ed9d98ce8943c05ef2f25e479907a2a866f1371fb29dfbde47f932cdc6ef8f",
+      "bytes": 1415
+    },
+    "stickers/openmoji/1F60D.svg": {
+      "blake3": "a6f0ee742a37017d1a7a04a63a7b815835279682dce3822e209da9e0199d1eef",
+      "bytes": 2048
+    },
+    "stickers/openmoji/1F60E.svg": {
+      "blake3": "d6f35b3736f2bf9c7439b3f661cd2226ae9057af5130aa4789db4916b9adbf52",
+      "bytes": 2766
+    },
+    "stickers/openmoji/1F60F.svg": {
+      "blake3": "e12eafb7357b6de6554a8fd9d556a323a33ea0f6189fb08c874a1cc9569ef31b",
+      "bytes": 1252
+    },
+    "stickers/openmoji/1F610.svg": {
+      "blake3": "2793affa22b46c1b20dca7541c20508e70a4e786d75da9b8b59e6ad50f8c2ace",
+      "bytes": 816
+    },
+    "stickers/openmoji/1F611.svg": {
+      "blake3": "2246bb4f066cae54b72508e452487bf427d88c5894c79953b4d7900bb0d9eebe",
+      "bytes": 920
+    },
+    "stickers/openmoji/1F612.svg": {
+      "blake3": "f74617f7fd94d0cf563758967f66dd631947e0947ea9c75129ff60236753f501",
+      "bytes": 1309
+    },
+    "stickers/openmoji/1F613.svg": {
+      "blake3": "75c45562cc06c48755248fe371aecc859f7e599fdff1b723363b88a1bae92272",
+      "bytes": 1810
+    },
+    "stickers/openmoji/1F614.svg": {
+      "blake3": "d98904c28e4f312a70cfdeacdffa2af39ba9bd0d0b63e18dae112fc1db71d9e9",
+      "bytes": 1517
+    },
+    "stickers/openmoji/1F615.svg": {
+      "blake3": "7730afa5bc69dee1f294323b53589adb20f44f4ad89529b9f267b4a5b9dbbac1",
+      "bytes": 874
+    },
+    "stickers/openmoji/1F616.svg": {
+      "blake3": "c599a9013f17b63844014626f8b06183fca6725451f3ce2b9f8ced38829f6a19",
+      "bytes": 981
+    },
+    "stickers/openmoji/1F617.svg": {
+      "blake3": "4a48a53ed42912a8dce0d776be0009c3df99b14ec8a854c0a3928a3a356c4766",
+      "bytes": 830
+    },
+    "stickers/openmoji/1F618.svg": {
+      "blake3": "33e8a84a94da69ac6ad7c48a21da670f23ccb9404f0ad98d98b2825446c39d4e",
+      "bytes": 2410
+    },
+    "stickers/openmoji/1F619.svg": {
+      "blake3": "4503eb7d475d2a5f24bed9a620d7aab4ef683fa36348e94108c46447a01cc034",
+      "bytes": 1032
+    },
+    "stickers/openmoji/1F61A.svg": {
+      "blake3": "dc5855b29440142977d820b43be6f9f59a87ecd8b885f9720f852ab2253fdbd0",
+      "bytes": 1375
+    },
+    "stickers/openmoji/1F61B.svg": {
+      "blake3": "114a2ca2168722b8f4e617247299c2a671cfe9d77e39b4a7b3c87b644b192c26",
+      "bytes": 1497
+    },
+    "stickers/openmoji/1F61C.svg": {
+      "blake3": "612ef56ae516426ac8405cf3bcb677f812fa119bb191e6edb0d61bd13ecd19af",
+      "bytes": 1624
+    },
+    "stickers/openmoji/1F61D.svg": {
+      "blake3": "2c3d527659052736eb555405e474940aa01aaea76b36c6e3f185e7eccc73da4d",
+      "bytes": 1714
+    },
+    "stickers/openmoji/1F61E.svg": {
+      "blake3": "748041274c31af08d172900ddca2f1c5e39c0dff146ccec84e124ac51f120e07",
+      "bytes": 715
+    },
+    "stickers/openmoji/1F61F.svg": {
+      "blake3": "6a262aee6d0814aab01196ea29799650a95e74460f75845e129da95fb4453d30",
+      "bytes": 1218
+    },
+    "stickers/openmoji/1F620.svg": {
+      "blake3": "d258b7d435e26edabaa87ca958181137fe23fde19eeaf1594076783c69dfbe4a",
+      "bytes": 1220
+    },
+    "stickers/openmoji/1F621.svg": {
+      "blake3": "ddaea408a8606671b102847d471f3ccc7d8848f0e491fdee8956e5ae73ef61a0",
+      "bytes": 1216
+    },
+    "stickers/openmoji/1F622.svg": {
+      "blake3": "169e75efc825ddd430b531d9b01886978f8bdc405585966a0c22da93f63798d6",
+      "bytes": 1523
+    },
+    "stickers/openmoji/1F623.svg": {
+      "blake3": "f4deddf1838b8144d89d61f9c0ae4427dae2b55bf6aa157aa29767c0f720e798",
+      "bytes": 1681
+    },
+    "stickers/openmoji/1F624.svg": {
+      "blake3": "7537682ef18ef6f9f748010b7aaebac9cffc0ade9bd07d6ad96844769d7ff517",
+      "bytes": 3341
+    },
+    "stickers/openmoji/1F625.svg": {
+      "blake3": "00e8c0dec2c9cdb992dd71d87430f02cb6b3536bb3ea84ca03c4b486ee6e9cba",
+      "bytes": 1662
+    },
+    "stickers/openmoji/1F626.svg": {
+      "blake3": "460bfc159af06ce7b981f4c4d00210a9be9dfe9721115b419681aa1c3ec472fe",
+      "bytes": 826
+    },
+    "stickers/openmoji/1F627.svg": {
+      "blake3": "0c476f2dda3bb415a0e1468b560b47896b927c3eb1920519b1530669bf6bb4aa",
+      "bytes": 1305
+    },
+    "stickers/openmoji/1F628.svg": {
+      "blake3": "ca1e1fa257368266d4e04154fe8398bc5859dfedd4a6f26a78dd449ca60cd25f",
+      "bytes": 1464
+    },
+    "stickers/openmoji/1F629.svg": {
+      "blake3": "316a9ed8d334dfe55dcbdf7002466b19449ae0333d7b1856f996562202748d5c",
+      "bytes": 1346
+    },
+    "stickers/openmoji/1F62A.svg": {
+      "blake3": "c77acfc8f09fff2cf2ddde4023759c6f7620c79dc980df65997f15e0763b0d0c",
+      "bytes": 1879
+    },
+    "stickers/openmoji/1F62B.svg": {
+      "blake3": "457edfe931dcfd731bd61d730bb54dcba8a4eba1b90e7217054b46a52754252f",
+      "bytes": 1502
+    },
+    "stickers/openmoji/1F62C.svg": {
+      "blake3": "270c30cef320fb8995da5eb2232b1234e9fcfb0da34082384b429b3d9141df97",
+      "bytes": 1637
+    },
+    "stickers/openmoji/1F62D.svg": {
+      "blake3": "70bb599a5052b37ca0afa9940092163e8c83b783301a5a8375a68ff6d53aa6c7",
+      "bytes": 2114
+    },
+    "stickers/openmoji/1F62E-200D-1F4A8.svg": {
+      "blake3": "1cb6a251367ba076e9c33adf48d834e4222a00a5e83b1130a66c0c603aba9bbf",
+      "bytes": 3168
+    },
+    "stickers/openmoji/1F62E.svg": {
+      "blake3": "505236d8e53b9562a6f926272813aedd84f12b6cdca51c649f46269514953ad0",
+      "bytes": 828
+    },
+    "stickers/openmoji/1F62F.svg": {
+      "blake3": "529ca65371976fb8c8e24f339cf36aecd707c35ad195fefe0de61275c90854e1",
+      "bytes": 1273
+    },
+    "stickers/openmoji/1F630.svg": {
+      "blake3": "b097a336df52eb0bf41bded903f05bdc2cef2e1c4fe5d25752703bfbeda7247a",
+      "bytes": 2111
+    },
+    "stickers/openmoji/1F631.svg": {
+      "blake3": "a22b7a681b9ca920e43dd3dce3f6e9f5caba83f640dd7ebbf87054db751d17d1",
+      "bytes": 3353
+    },
+    "stickers/openmoji/1F632.svg": {
+      "blake3": "651f981745c2629b2e2edbebc05cddd60b7e3f5ad69d0cd3d17cc62ad1020de2",
+      "bytes": 1322
+    },
+    "stickers/openmoji/1F633.svg": {
+      "blake3": "d7b54e6986e0920dcb1e22b3f97a73f47dae6ecc8fcfea94048fafccc0d850dd",
+      "bytes": 3343
+    },
+    "stickers/openmoji/1F634.svg": {
+      "blake3": "ce572da563b741c2d4ab83ab26c50ab7225f7a69b63e320ba3a58c52432ef9d6",
+      "bytes": 3461
+    },
+    "stickers/openmoji/1F635-200D-1F4AB.svg": {
+      "blake3": "867c3828a115c926561de069061f44946c778047163014fccc2aeccb4fe3a8ce",
+      "bytes": 2062
+    },
+    "stickers/openmoji/1F635.svg": {
+      "blake3": "bf190e0dbc4adda631f93ab1ddf4edfcd5ca9d34fda94b6103ac6397b3733ae6",
+      "bytes": 1319
+    },
+    "stickers/openmoji/1F636-200D-1F32B-FE0F.svg": {
+      "blake3": "92da70063c6ae1ca3db3265a951223088856e360c79c8ea7c347b1545caa3a19",
+      "bytes": 3211
+    },
+    "stickers/openmoji/1F636.svg": {
+      "blake3": "ab9c368dbe57dc0c162e335255f5002b137fb9780e6d5e4569425d5a3fbb926f",
+      "bytes": 605
+    },
+    "stickers/openmoji/1F637.svg": {
+      "blake3": "782948337eca8f7c9d02a3bda51fcbdf0735fb0761b0cda8157f784cca7e2702",
+      "bytes": 1601
+    },
+    "stickers/openmoji/1F638.svg": {
+      "blake3": "9f50595fa3af33362bc15a157ef2390d59b95ea7960d246da17b01a1d22d59e9",
+      "bytes": 3121
+    },
+    "stickers/openmoji/1F639.svg": {
+      "blake3": "e844aa7210ac4f2fa429b96846b968d9dd1c398b5cc762ddb5a68128a1b08839",
+      "bytes": 4566
+    },
+    "stickers/openmoji/1F63A.svg": {
+      "blake3": "a7369a55a6f9cfa04043249e9d99b90e9433ce003748df334bb7165b1717544b",
+      "bytes": 3564
+    },
+    "stickers/openmoji/1F63B.svg": {
+      "blake3": "6225e7d08f8d79bd47cfd48ef2360da5bb691a9c7580f4db5f896b56f4357f6d",
+      "bytes": 4003
+    },
+    "stickers/openmoji/1F63C.svg": {
+      "blake3": "ecad65a79167d7a4c7fa464344c3aaeaba6d47165bc0524018b4baa1339d7bd0",
+      "bytes": 3458
+    },
+    "stickers/openmoji/1F63D.svg": {
+      "blake3": "5640131c95b87a7ddc992d27e2b8f200db933ed0532dfb97f7d40e40f76cb6e5",
+      "bytes": 2548
+    },
+    "stickers/openmoji/1F63E.svg": {
+      "blake3": "5148ea235fd9bb2306f3255d64ec03af87be855b79a58f93b854ec540433ab3a",
+      "bytes": 3322
+    },
+    "stickers/openmoji/1F63F.svg": {
+      "blake3": "ab515bb4d0b13db0075004bafb5a391e23aa269da42900973e7ba7f62276b55e",
+      "bytes": 4164
+    },
+    "stickers/openmoji/1F640.svg": {
+      "blake3": "7ac512fc6d19541f830dfa1a4b896c0ace62a24081020aee6a769575efd5cd20",
+      "bytes": 4191
+    },
+    "stickers/openmoji/1F641.svg": {
+      "blake3": "0dd1641b59e380fb283c196a57a4a7978d1b639d6e520443b652fcb9a7388e72",
+      "bytes": 875
+    },
+    "stickers/openmoji/1F642-200D-2194-FE0F.svg": {
+      "blake3": "00a20bbb3b848b3f2178b660a656766057f99afc85cb7fde5250b6749ede86f7",
+      "bytes": 1309
+    },
+    "stickers/openmoji/1F642-200D-2195-FE0F.svg": {
+      "blake3": "3cbb16e77e574c074f2648c97904c0b5505d3cd7ce25ff34cfd3ef300f852bc9",
+      "bytes": 1580
+    },
+    "stickers/openmoji/1F642.svg": {
+      "blake3": "fac9bb9375fb897df2a7b3d9a4e76780e1f509f190f0f6664bafd31ee3a9415a",
+      "bytes": 791
+    },
+    "stickers/openmoji/1F643.svg": {
+      "blake3": "c6a20b4a6c98d59cdea781bdc86a70477d5f9ea1e027e2702a6289e799aac27e",
+      "bytes": 777
+    },
+    "stickers/openmoji/1F644.svg": {
+      "blake3": "fc5d333c4f179032182856e318a62f302f6869a97585b6f44206b94a0f854e8d",
+      "bytes": 999
+    },
+    "stickers/openmoji/1F648.svg": {
+      "blake3": "da95cae18b2cbf9e83fbba9aa69dfce8b4fabc03ac326e08e201c1fa1fa59b25",
+      "bytes": 5898
+    },
+    "stickers/openmoji/1F649.svg": {
+      "blake3": "49619e3c1fb1820c98c29f631714aea7646243cc0a6bbeacb77c385b3014bab5",
+      "bytes": 5329
+    },
+    "stickers/openmoji/1F64A.svg": {
+      "blake3": "5438996521a3f16b9aae32ce951d6e4a72e81aac1e4b3852a138dd00d035cfd6",
+      "bytes": 6608
+    },
+    "stickers/openmoji/1F64C.svg": {
+      "blake3": "50bdb810eff9ab0a5ce6f2e5a5fb593a5506f579ffe55bfefdc2dd32a12a26d0",
+      "bytes": 3020
+    },
+    "stickers/openmoji/1F64F.svg": {
+      "blake3": "3c13d66318ccef7dee04031609568888ab107d1631e456f6a2833a538bbbfc29",
+      "bytes": 2226
+    },
+    "stickers/openmoji/1F90C.svg": {
+      "blake3": "2d85670128f572ac5431e4a2156b823e90a7582f2f4f487cd6d6c87b41a7830e",
+      "bytes": 1979
+    },
+    "stickers/openmoji/1F90D.svg": {
+      "blake3": "0b0df8725d2c8d1100d4cdc4ab98848ab5cd0a6cf8ee68122cba5bf57e38b241",
+      "bytes": 889
+    },
+    "stickers/openmoji/1F90E.svg": {
+      "blake3": "b50d82b8d165619d5b15a641f292401f4c170ec2e348f2e006d72743e092ff1e",
+      "bytes": 757
+    },
+    "stickers/openmoji/1F90F.svg": {
+      "blake3": "455e52d8f871c467ef29f939a4474f6fec836ff8fc826e1b93dcfa1100313a03",
+      "bytes": 3635
+    },
+    "stickers/openmoji/1F910.svg": {
+      "blake3": "c768f6f843b51b6c0ce1475138600c67b12d5ccd8ff42d2a39ca09d823a6f46f",
+      "bytes": 3966
+    },
+    "stickers/openmoji/1F911.svg": {
+      "blake3": "c8e2643e9af0dc9b27fa945e27f90245853e07e57bef2668c576b7cb46c9f749",
+      "bytes": 3689
+    },
+    "stickers/openmoji/1F912.svg": {
+      "blake3": "9bbf372ff720655c4811dca346349c95f11323137a915677250cd75e3643cfd1",
+      "bytes": 2314
+    },
+    "stickers/openmoji/1F913.svg": {
+      "blake3": "ce8a589fbd422db8660f66ab4b8946d8bfbb29f2b705c7eed336abd0db3dfa4b",
+      "bytes": 2899
+    },
+    "stickers/openmoji/1F914.svg": {
+      "blake3": "45017865056b7ed7a493f23be231974f904e86dac076901ae5b92009909d9af0",
+      "bytes": 1826
+    },
+    "stickers/openmoji/1F915.svg": {
+      "blake3": "c450857bfcbd264b3adbbe2e4cf589b50b9e97ecc1f16aa9f6fd79ae5ca38f0d",
+      "bytes": 2401
+    },
+    "stickers/openmoji/1F916.svg": {
+      "blake3": "85a4ad71f0f382005f63b5d151e7b1ab207de17a0f6f30f6e7c14056eec0d16d",
+      "bytes": 3632
+    },
+    "stickers/openmoji/1F917.svg": {
+      "blake3": "f66d5aaccf6e617911ae25550c8d1404efcc523a84872b5902d469c789b19769",
+      "bytes": 2638
+    },
+    "stickers/openmoji/1F918.svg": {
+      "blake3": "ab4fc21c5303d88a4ebdead263f2007c89d487120d3b66c7e3b3b93f88cab7ff",
+      "bytes": 3073
+    },
+    "stickers/openmoji/1F919.svg": {
+      "blake3": "2fabf02901a3637a0879f2c361c43f1e6e96ab662f4f431844831e58e6f67f6d",
+      "bytes": 2087
+    },
+    "stickers/openmoji/1F91A.svg": {
+      "blake3": "430d87fb663196a137be34c77e9a78abb9692cf636215ad01710c99587559279",
+      "bytes": 2091
+    },
+    "stickers/openmoji/1F91B.svg": {
+      "blake3": "34c5cf00fc136cef05b61e19804e46ec75d020ec18ce692e4a5457b940dd611f",
+      "bytes": 1855
+    },
+    "stickers/openmoji/1F91C.svg": {
+      "blake3": "0a13a5d47486d2df16a745b75107cb6eca4e9a2410cd428d41fe37ff19dc67e8",
+      "bytes": 1355
+    },
+    "stickers/openmoji/1F91D.svg": {
+      "blake3": "93d83a93157b736227abbbcd226e2c9fdab9d59ea33a58d8fbe87a38309a0a8d",
+      "bytes": 3780
+    },
+    "stickers/openmoji/1F91E.svg": {
+      "blake3": "079478b12d76a0d2986ad7d61a14d5699454c777a4e4a1398b2f0ac642c97fe2",
+      "bytes": 3326
+    },
+    "stickers/openmoji/1F91F.svg": {
+      "blake3": "3c145b59ce271dcbee6645d6c2ec80a39295225f5ae0ee2fd07a2c4c31309da6",
+      "bytes": 1919
+    },
+    "stickers/openmoji/1F920.svg": {
+      "blake3": "f12d5c999e991c15449e101483d3a5885d6c8fbd7d40a41b11e6b63c25077059",
+      "bytes": 3644
+    },
+    "stickers/openmoji/1F921.svg": {
+      "blake3": "71fcf2adceb1d44b7e5ac2e3e7b1d9ef4cf37d44bd0e4edbe28602758cdd399e",
+      "bytes": 3740
+    },
+    "stickers/openmoji/1F922.svg": {
+      "blake3": "7421829af9dcc2a713698687be0d6164dec72c94a959f15f6bb5a2be971f432d",
+      "bytes": 1669
+    },
+    "stickers/openmoji/1F923.svg": {
+      "blake3": "307744cf32a70d03f7be6acfca65644fa259b393e3081d6357ff9eb2d54c1e62",
+      "bytes": 2738
+    },
+    "stickers/openmoji/1F924.svg": {
+      "blake3": "5aa6008adf28559448732706a4b210d9f2239bdbf2dd76b450c88c51a9d9d235",
+      "bytes": 2251
+    },
+    "stickers/openmoji/1F925.svg": {
+      "blake3": "bfcff4b801f60ee33c024eace1b869e98863de86a63a03d72b9e39f4d04582fc",
+      "bytes": 2100
+    },
+    "stickers/openmoji/1F927.svg": {
+      "blake3": "7a4a300699f56616d80e07e877f00db19f60117deafbee65f36e24189ff8046e",
+      "bytes": 1799
+    },
+    "stickers/openmoji/1F928.svg": {
+      "blake3": "1a32387589d9eef5b8087483538bb28366a7a2b7d8672d5bfde57e462da3c28c",
+      "bytes": 1291
+    },
+    "stickers/openmoji/1F929.svg": {
+      "blake3": "5323be1b20dd9a7ed92dac748ae7c1799bda0b4d2ef79c058249dcae790704bd",
+      "bytes": 2947
+    },
+    "stickers/openmoji/1F92A.svg": {
+      "blake3": "1fe4ee5181274c4ffa111d1569fbf678d57ee112248a1fe000c453161f8842a5",
+      "bytes": 2477
+    },
+    "stickers/openmoji/1F92B.svg": {
+      "blake3": "704074c38cd16061f9edb7e4c272446484746c05a44afa86e501d4ff1e1715ab",
+      "bytes": 2483
+    },
+    "stickers/openmoji/1F92C.svg": {
+      "blake3": "ffce21dcabe45bc272e22c83b92c2fa8c3cf4dc523a74af40cf3c9852139408f",
+      "bytes": 3865
+    },
+    "stickers/openmoji/1F92D.svg": {
+      "blake3": "34bdf69a2d37aaa4e4ab4068248fd6bd0ee471d011e5f07d56a8b21da1237d3a",
+      "bytes": 3038
+    },
+    "stickers/openmoji/1F92E.svg": {
+      "blake3": "c533e1e3f9f8b00e25ae1a284a42acf08d6acdeece881222f48364fd3325a818",
+      "bytes": 3225
+    },
+    "stickers/openmoji/1F92F.svg": {
+      "blake3": "855afcaad246069ad77b9bb3fac121b3b63cb06b97311adefc076b7d3cef84fb",
+      "bytes": 4131
+    },
+    "stickers/openmoji/1F932.svg": {
+      "blake3": "9eb140d35180785b7ad4b67fd8ab208650eedf8a13f1d22f45a13f0b05e1d498",
+      "bytes": 3303
+    },
+    "stickers/openmoji/1F940.svg": {
+      "blake3": "1d8a078c66f6420d133114c89743c25f2e25bc5eda62ba9381b14b63bd04a623",
+      "bytes": 5403
+    },
+    "stickers/openmoji/1F941.svg": {
+      "blake3": "d965cc0a5625fbc4b9c29951deeeb12bb991102dda3cfb01fccaca0c1e6a6e80",
+      "bytes": 2857
+    },
+    "stickers/openmoji/1F942.svg": {
+      "blake3": "c1b84c782c5b8671f9a2d0513d5291525a7f5cffbd7444c72f1b49b367f9868f",
+      "bytes": 2411
+    },
+    "stickers/openmoji/1F943.svg": {
+      "blake3": "08b9ce3ae1105a44cfbf9a256e4e99aabcb37487348318aa5259fa1c22d6ee06",
+      "bytes": 1503
+    },
+    "stickers/openmoji/1F947.svg": {
+      "blake3": "ace536b2ad146cad60a59ae26b4b426d046f5bfd6ed13c47355ffb907855609b",
+      "bytes": 2889
+    },
+    "stickers/openmoji/1F948.svg": {
+      "blake3": "5b61541a44d9ebfc9a6f268ff487b6bdd2e6a7cce3183331b7ed419712c717a1",
+      "bytes": 2997
+    },
+    "stickers/openmoji/1F949.svg": {
+      "blake3": "f13c5989cfdd3fd45ec824ea7f1a689a25509b22663aab4d5c48ed7e0a4d32c6",
+      "bytes": 3053
+    },
+    "stickers/openmoji/1F95B.svg": {
+      "blake3": "9f03ba99f208ca4e8cd4f204f458c3639e240c59c0574f341705b998d83a6e60",
+      "bytes": 436
+    },
+    "stickers/openmoji/1F95D.svg": {
+      "blake3": "b5acb35c5b9f29818ba6d64c670a0e27733eb36773209d904d8a0520d7535f18",
+      "bytes": 3366
+    },
+    "stickers/openmoji/1F964.svg": {
+      "blake3": "9b9ba7bf0c736738d5527ba932e56727e5eb7679e9337d84bb8ef4dbc9789e5b",
+      "bytes": 922
+    },
+    "stickers/openmoji/1F965.svg": {
+      "blake3": "27ba368a9b74c5320fded0767fe7412179053ac55d941d49b1ca5ca75e0c967e",
+      "bytes": 3242
+    },
+    "stickers/openmoji/1F967.svg": {
+      "blake3": "e822cb55399493800aceb4dae53a74050999016a8b93d41bee72d829c02236a0",
+      "bytes": 2915
+    },
+    "stickers/openmoji/1F96D.svg": {
+      "blake3": "651c7b14a406428a8dca29a8e1277c56c5769975ada5cb461e008ddfae2edc6c",
+      "bytes": 2245
+    },
+    "stickers/openmoji/1F970.svg": {
+      "blake3": "2a781f29395a88e94742d6485dc4f8f45148781b3e443b4008db429ed811e3ad",
+      "bytes": 4073
+    },
+    "stickers/openmoji/1F971.svg": {
+      "blake3": "a93594c5829dbbf3fd255fef1f4af3b7f3a9bcffc8e6815f7529b01b9963e0e4",
+      "bytes": 3469
+    },
+    "stickers/openmoji/1F972.svg": {
+      "blake3": "a7818990495610a24738f79bda930720d399936f8b42fd9c1b838dfc350d4373",
+      "bytes": 1134
+    },
+    "stickers/openmoji/1F973.svg": {
+      "blake3": "5335fc6eb0f2aaf74c6db93a65e8d923e8ce37f20c94635a21c8bae2f0c95dab",
+      "bytes": 5823
+    },
+    "stickers/openmoji/1F974.svg": {
+      "blake3": "96825f8233c66d352b763a63aebbcaa1561cb5a14be8e3cb3749054423bfd34f",
+      "bytes": 1331
+    },
+    "stickers/openmoji/1F975.svg": {
+      "blake3": "f24216d4bb2b96a33078ce4b001bde64a9dc6b40b92211864edb066ce9319c5e",
+      "bytes": 2564
+    },
+    "stickers/openmoji/1F976.svg": {
+      "blake3": "d4cda8df3536b6b9a8b6e5fd65545dd4c86b66116631752def6e4fa4d068c63a",
+      "bytes": 4863
+    },
+    "stickers/openmoji/1F978.svg": {
+      "blake3": "0dba2bc12d8a98086e56ca70799edd646eaa83bfaf9ed11c6b7f559585f096ab",
+      "bytes": 4197
+    },
+    "stickers/openmoji/1F979.svg": {
+      "blake3": "514929f58471a4d4b15a3029e8d5cacec4cc97c4055393a38b3b1016259a4470",
+      "bytes": 3354
+    },
+    "stickers/openmoji/1F97A.svg": {
+      "blake3": "f7c21a0c026559d99bf9297bcc47cc94c5d676e1ad933efa9e00fffb4c8e4170",
+      "bytes": 2500
+    },
+    "stickers/openmoji/1F980.svg": {
+      "blake3": "e752cee0ea11335d1f133b7384315730a3b95efbbe927fcca1bc1a4e610c9b46",
+      "bytes": 4463
+    },
+    "stickers/openmoji/1F981.svg": {
+      "blake3": "a9d23f72e3ad7d6d4756c721948c9016cd9ef86653c3a3f24bff5571bde1b95a",
+      "bytes": 6435
+    },
+    "stickers/openmoji/1F983.svg": {
+      "blake3": "e66d5c86e625913f34e159df8c6b401b915b3cbca578825c9761f066d6312734",
+      "bytes": 2255
+    },
+    "stickers/openmoji/1F984.svg": {
+      "blake3": "595d4373738069b927cef634b86b3c24b95d442d4a19c3a48675a3abf89a5a79",
+      "bytes": 3258
+    },
+    "stickers/openmoji/1F985.svg": {
+      "blake3": "4a88dcc28ddaf00b7c1e6469a2a234ad8dcf5adebe1823c931070abe3ec780b1",
+      "bytes": 2213
+    },
+    "stickers/openmoji/1F986.svg": {
+      "blake3": "6c514b23b7faa3cc9eb12b09c7f195bdfa311a8ebd84ed037c2adbb777844032",
+      "bytes": 3165
+    },
+    "stickers/openmoji/1F987.svg": {
+      "blake3": "291e1d03c6e445e3b2bb21dc47d68995dd881f3285763cf124d7cbb84195efb9",
+      "bytes": 2010
+    },
+    "stickers/openmoji/1F988.svg": {
+      "blake3": "7b5386cdf8557616ddef442e66b21abfbcd4328f7dd188045ee0ef955e867d34",
+      "bytes": 1977
+    },
+    "stickers/openmoji/1F989.svg": {
+      "blake3": "3e309ab3668e8445277bf817e7266cf77f783bdf0cc88dab33bdc3f56ea455ae",
+      "bytes": 2505
+    },
+    "stickers/openmoji/1F98A.svg": {
+      "blake3": "5cd5187c667b2a455c4ff610196da7a9583473868429327f2262dc1e685c667c",
+      "bytes": 4534
+    },
+    "stickers/openmoji/1F98C.svg": {
+      "blake3": "496c38c687f311e4910432d2f7780f187b1a4da746438e774743d7be358bdf16",
+      "bytes": 4124
+    },
+    "stickers/openmoji/1F98D.svg": {
+      "blake3": "7aa2e904fc8a9e41d3c285689e975d2efc34c74062c17efebe2e72c91bb6f26f",
+      "bytes": 2424
+    },
+    "stickers/openmoji/1F98F.svg": {
+      "blake3": "61f5be2aa77c31cf073e9c15a78b0f799334fc44613d8da6e53eeb1a0477c92c",
+      "bytes": 3509
+    },
+    "stickers/openmoji/1F990.svg": {
+      "blake3": "eef4d7e97a62b340e76f6d494e518500af740e9072a2e3fc4b774957fabb546d",
+      "bytes": 4768
+    },
+    "stickers/openmoji/1F991.svg": {
+      "blake3": "dbcdd6e02405749fff39685c378b1a3d0680819cbd0aba8905c6725cedbf0a8b",
+      "bytes": 4143
+    },
+    "stickers/openmoji/1F992.svg": {
+      "blake3": "2ddaf9964ba159ebb105c90d479038d2efad9dd5e5ff0b5e588f7cd86e76ef6e",
+      "bytes": 2540
+    },
+    "stickers/openmoji/1F993.svg": {
+      "blake3": "fd1fc11d35c903f836b73f7fb1436e521d2212c0dceb5db1add4eb08b3f7f93a",
+      "bytes": 3798
+    },
+    "stickers/openmoji/1F994.svg": {
+      "blake3": "a0d16793a299546e94b1912983abdd6eb9b745f52706198576c90622fc2b0b92",
+      "bytes": 4536
+    },
+    "stickers/openmoji/1F998.svg": {
+      "blake3": "fee29fed7e01c075773b9fc2d8c25f4ad6cbfbf37fc8d8af19ff778c6937aece",
+      "bytes": 5199
+    },
+    "stickers/openmoji/1F999.svg": {
+      "blake3": "20e5f0e5f3ede33933e86a44eeeabbb1ad18c60a4de5d4743d8968e1d0d64d32",
+      "bytes": 3405
+    },
+    "stickers/openmoji/1F99A.svg": {
+      "blake3": "7fe292c1345902e7c2dfedf143bf53cb2f82f3348be13fdfe27a100eaf5f2fda",
+      "bytes": 6677
+    },
+    "stickers/openmoji/1F99B.svg": {
+      "blake3": "ddd5d2f773b6b575c1043060f8dc11e714c8bd886df71b39c1a6e58f61a5c3a4",
+      "bytes": 3739
+    },
+    "stickers/openmoji/1F99C.svg": {
+      "blake3": "7e6373a62cb186950f1d6866a4232b330effe57554a4c45cf666d4e0d93282a9",
+      "bytes": 4250
+    },
+    "stickers/openmoji/1F99D.svg": {
+      "blake3": "2b899c0bdcee003d9d9c080068cb1c83b38e0545d9d742164c9642792aed1954",
+      "bytes": 13024
+    },
+    "stickers/openmoji/1F99E.svg": {
+      "blake3": "c8ecec4b3c45135dcb92be0a7f5e93a881fad16cf53d6d9d842545d590da66a6",
+      "bytes": 9878
+    },
+    "stickers/openmoji/1F9A1.svg": {
+      "blake3": "68ae92b7fd2cc4a1c4d73fed8b5e2e88887cfc4153997a73cc0d848ca0862256",
+      "bytes": 3264
+    },
+    "stickers/openmoji/1F9A2.svg": {
+      "blake3": "9c8b7d94e8bd414d47f5e5d171a02672b4bfae0a488f17d542adfeb566ada3b8",
+      "bytes": 1676
+    },
+    "stickers/openmoji/1F9A3.svg": {
+      "blake3": "de778cfaae6d96b88d0adef62c9295c2d7015f6a9d97eb3a085551ff06f04b5a",
+      "bytes": 3723
+    },
+    "stickers/openmoji/1F9A4.svg": {
+      "blake3": "be07f862533062653f1ebe745de26134d706aa740234b13e4ae1a61ef7e82a1e",
+      "bytes": 5884
+    },
+    "stickers/openmoji/1F9A5.svg": {
+      "blake3": "3bb6d89a49d8931c7ec44df75ab70d8777664d1f837fbe72e28ba0c18c035a06",
+      "bytes": 8127
+    },
+    "stickers/openmoji/1F9A6.svg": {
+      "blake3": "f9c26766e27a10b5c345c1aaa18c5ca315f684150cb1fde05868609d08213079",
+      "bytes": 7733
+    },
+    "stickers/openmoji/1F9A7.svg": {
+      "blake3": "40223b38c62e12a5d571c8ed1128def6582fd85b5d6c53e08472d0803ae8cc15",
+      "bytes": 5414
+    },
+    "stickers/openmoji/1F9A8.svg": {
+      "blake3": "be9b269304c55ecf5e216efd8dfe17df56a885ddc4ba6ec9fd06da3df7f447bd",
+      "bytes": 4847
+    },
+    "stickers/openmoji/1F9A9.svg": {
+      "blake3": "abd903d9d248cc0134321594f454d8aa548b086cf3aa8f2f5b81d0b034a778f5",
+      "bytes": 1473
+    },
+    "stickers/openmoji/1F9AA.svg": {
+      "blake3": "52288dfbafb944539ca6a7790b8aceedffbb49fc4466e3e50978ad751e02b8b9",
+      "bytes": 7713
+    },
+    "stickers/openmoji/1F9AB.svg": {
+      "blake3": "68daaeb767da5208cd299978ba5c7c137824f3bf63a9b9ac75ea90eac945d40e",
+      "bytes": 3273
+    },
+    "stickers/openmoji/1F9AC.svg": {
+      "blake3": "7fc6195a22f1d9d0406ecd3ca91b6add485efad4da3d9eb96e2209aeacc400bf",
+      "bytes": 4199
+    },
+    "stickers/openmoji/1F9AD.svg": {
+      "blake3": "93469452c1ccc20e8e4dd38f86ff4855cf94c0ef9c28803852d05c2abdd6912d",
+      "bytes": 3118
+    },
+    "stickers/openmoji/1F9AE.svg": {
+      "blake3": "fec6d5186a6d8b7fdb4209ae80f12300b4b65afff7d6317301e3b446106500ec",
+      "bytes": 7481
+    },
+    "stickers/openmoji/1F9C1.svg": {
+      "blake3": "3e789973ad7c7ac839a6bacdb0a9f143b1589278c621659c162edf27d2b19a91",
+      "bytes": 6166
+    },
+    "stickers/openmoji/1F9C3.svg": {
+      "blake3": "4b34c3a5b3a606435f014d0649f7fa95d48a1779a15821a4bb8cfcb02166245b",
+      "bytes": 2443
+    },
+    "stickers/openmoji/1F9C9.svg": {
+      "blake3": "80a981abdffd61e1c77d358c376f9bdbdd0ab3a0f9a97a717c922a3b1505defd",
+      "bytes": 1961
+    },
+    "stickers/openmoji/1F9CA.svg": {
+      "blake3": "54741155b84b540130a19bd4155fd18e1573d7e2b848abdc48d0c8ee2fb0b7ab",
+      "bytes": 1468
+    },
+    "stickers/openmoji/1F9CB.svg": {
+      "blake3": "6cf7431777ab1e37663aded8e38a96c4c96ab7e8f879e393f789c4f4b057fd7d",
+      "bytes": 2726
+    },
+    "stickers/openmoji/1F9D0.svg": {
+      "blake3": "da900b17c7d170fdb01e640a958e9f5d5a07dcb223d6e66f671eb6488eb2dcdc",
+      "bytes": 1885
+    },
+    "stickers/openmoji/1F9E1.svg": {
+      "blake3": "6cee4e9137783b30def02d8a2927736347769971802543d39cb8247cb086eabe",
+      "bytes": 757
+    },
+    "stickers/openmoji/1F9E7.svg": {
+      "blake3": "5b6a4e7a1c07f284f96598d0749d98b651b86ad46ef689daeb6eac695b3c1114",
+      "bytes": 2200
+    },
+    "stickers/openmoji/1F9E8.svg": {
+      "blake3": "0fc16777c8e614d8ce8530ba49b3559c352e42486479730e6e5a981e4565e9ca",
+      "bytes": 1555
+    },
+    "stickers/openmoji/1FA75.svg": {
+      "blake3": "27cab02b0a8dda682a8cb24cc1bf18726a63a9fac473e85e8fd636ab2c054906",
+      "bytes": 804
+    },
+    "stickers/openmoji/1FA76.svg": {
+      "blake3": "9503cf9458cbf78e014cd01a1b8b251bb679fedbb1d374b14d7f67acac9d85f5",
+      "bytes": 804
+    },
+    "stickers/openmoji/1FA77.svg": {
+      "blake3": "fff72400e6cacdabcb6c4e8c4b1562d494fe82a82491172c1dd8ebe521d7fdfc",
+      "bytes": 804
+    },
+    "stickers/openmoji/1FA87.svg": {
+      "blake3": "efbb51830d9113ea6b072e4a1753892cd6c20a1e44ec9a3e6c535c175c95f5a4",
+      "bytes": 5234
+    },
+    "stickers/openmoji/1FA88.svg": {
+      "blake3": "72b981808fcabbb70fb923e3d9f370f76a1fcb3fb29616f73a5e2c3fab6dda40",
+      "bytes": 1226
+    },
+    "stickers/openmoji/1FA89.svg": {
+      "blake3": "8b78001f608a2413f98229762fdabdcfe2ba936f7724e52568dc87591b836c0f",
+      "bytes": 2379
+    },
+    "stickers/openmoji/1FA8A.svg": {
+      "blake3": "015148824b6912a5e23bdf8dbaabc28db4b7c785c2dced2199de2e8ae8f680d5",
+      "bytes": 5726
+    },
+    "stickers/openmoji/1FA95.svg": {
+      "blake3": "ec1d6ebf8f6c28951d2a60e9830d233d1e6618b24f436c8680b576f172045e6b",
+      "bytes": 1409
+    },
+    "stickers/openmoji/1FA97.svg": {
+      "blake3": "10fe58e1bec3a38cfa052418b9f05c117b271308eace0d2b46695a2c9d035ff5",
+      "bytes": 5785
+    },
+    "stickers/openmoji/1FA98.svg": {
+      "blake3": "351d4e202c4e105c1bc8d2446eda28f52387a24d0a5a48c43d427b2987781037",
+      "bytes": 5555
+    },
+    "stickers/openmoji/1FAB6.svg": {
+      "blake3": "6ca5e27171860d7a5dd04ccf08c5bc74c15633a9cc351fd119d09d235f0db7b4",
+      "bytes": 1624
+    },
+    "stickers/openmoji/1FAB7.svg": {
+      "blake3": "09313dceaf9c5015b2a4a4699b971c86bf393f08a3b7bf454302b5eebc6cec45",
+      "bytes": 3807
+    },
+    "stickers/openmoji/1FAB8.svg": {
+      "blake3": "c9c94d8547f4bf5b4c1209a3e559f7731f96bfb0dcbea750f7fb64dd55f8ebe0",
+      "bytes": 5848
+    },
+    "stickers/openmoji/1FABB.svg": {
+      "blake3": "2d69fe17f8da8aa944996f8ac87218d6edda53046ea29684eeffe1bf26119a32",
+      "bytes": 3811
+    },
+    "stickers/openmoji/1FABC.svg": {
+      "blake3": "e35e3f2ce09085079bbea7f42c9051b0d1016bd961615d443c68bc33de675148",
+      "bytes": 3411
+    },
+    "stickers/openmoji/1FABD.svg": {
+      "blake3": "58eeb55a0d936f864e9619a7fcd59e35c151cedb5c6cb22e798aea53cbc0a236",
+      "bytes": 1255
+    },
+    "stickers/openmoji/1FABF.svg": {
+      "blake3": "666dc717fa653fb8bd78e77a8d0ac041fb925ff2ea9a339e555fab60b6d9dc8c",
+      "bytes": 2734
+    },
+    "stickers/openmoji/1FACD.svg": {
+      "blake3": "33c950e4fb599ba11fa54260acc1d35ffc87244120b0732e6978c306661f28b7",
+      "bytes": 2043
+    },
+    "stickers/openmoji/1FACE.svg": {
+      "blake3": "b9cfe07f47ed1cfe8d50cb016ab8b6e0b663fd7b1e91768add6931ef7ad4d778",
+      "bytes": 3961
+    },
+    "stickers/openmoji/1FACF.svg": {
+      "blake3": "999aa83835d637776b664e7af4907ee55dbe41e100ae5da4f3eef97dbe000128",
+      "bytes": 3792
+    },
+    "stickers/openmoji/1FAD0.svg": {
+      "blake3": "e675f6a433c2fe737ceceb0a6e7e84f962c962cb2cccee685a2a3837f22baf53",
+      "bytes": 2565
+    },
+    "stickers/openmoji/1FAD2.svg": {
+      "blake3": "0dcc3412960d0f9de9967abef54bfb8c1bcc98b10c561b83a9835269026adc93",
+      "bytes": 1165
+    },
+    "stickers/openmoji/1FAD6.svg": {
+      "blake3": "9d96a39791899ed80ebe6b2b5c28c61c29c7ca08b7a9ee84e4c9a779a96fc85b",
+      "bytes": 1723
+    },
+    "stickers/openmoji/1FAD7.svg": {
+      "blake3": "e49d8d1f66be18ef4d365f0ffed4b998feb06330adb0c4be6181df931f388de5",
+      "bytes": 3052
+    },
+    "stickers/openmoji/1FADF.svg": {
+      "blake3": "ca93238c6b2686f954d7372d7a36c8170b88462dec36dba2a2ddb7678a172355",
+      "bytes": 3159
+    },
+    "stickers/openmoji/1FAE0.svg": {
+      "blake3": "f12bee6529f8619eb0191dab199a4d62a21fa58114e5b9b13a9b6e10e77de0da",
+      "bytes": 3123
+    },
+    "stickers/openmoji/1FAE1.svg": {
+      "blake3": "e3b23b585e4e46731a791830162ab736a8a2a4daacca485994dca494265b1d8f",
+      "bytes": 1730
+    },
+    "stickers/openmoji/1FAE2.svg": {
+      "blake3": "abcb1c4dd0b39993cb0f7867323d490032a5f3988b7daa716547953aec24a2cc",
+      "bytes": 1655
+    },
+    "stickers/openmoji/1FAE3.svg": {
+      "blake3": "5dc70c95ec5322d8285fe9468bb1521299ca0a2ae5da47c957dabfc3b1316d7c",
+      "bytes": 4933
+    },
+    "stickers/openmoji/1FAE4.svg": {
+      "blake3": "9afb58629d993edd055b9a06bcf9cdd7247c8b3c9b9674f9ca956335b998e902",
+      "bytes": 600
+    },
+    "stickers/openmoji/1FAE5.svg": {
+      "blake3": "154b2839fb75fd2ba1baf1812d02e6c610dffb8ac1c6f0267850aec801d802a5",
+      "bytes": 964
+    },
+    "stickers/openmoji/1FAE8.svg": {
+      "blake3": "6050604f9499386bc59c4829196b3dda0d227309b26358c5c7c6c5ec8dd07676",
+      "bytes": 1544
+    },
+    "stickers/openmoji/1FAE9.svg": {
+      "blake3": "a7dc7f478c84904b0942dc40bbcfccb3f242fe2cf7bdf8bb418b4627cdbf7033",
+      "bytes": 2051
+    },
+    "stickers/openmoji/1FAEA.svg": {
+      "blake3": "30b83c10576effd93b82305eb5b3b2e18b85a5472564ae07a00c629407dccc80",
+      "bytes": 1706
+    },
+    "stickers/openmoji/1FAEF.svg": {
+      "blake3": "cdbf80d25982617240827f883e65296e8363d60292da0a7e3cee3ee4ac327b1c",
+      "bytes": 7214
+    },
+    "stickers/openmoji/1FAF0.svg": {
+      "blake3": "5fe300c2f5e4c067fdbbf6f2e640928868574bbc0b2c55d5311ec30c65b1b8e1",
+      "bytes": 1651
+    },
+    "stickers/openmoji/1FAF1.svg": {
+      "blake3": "b744ef1b6581f2c71bb4540f31da0803a1b80eb8dc2bbab203c3937b04fd1f81",
+      "bytes": 1933
+    },
+    "stickers/openmoji/1FAF2.svg": {
+      "blake3": "47b936f51e0fdc67e63510a865c7ee392223cef8b307e9375d9dbc3f670ea85a",
+      "bytes": 2004
+    },
+    "stickers/openmoji/1FAF3.svg": {
+      "blake3": "46e6b09b40fbaf113527530d62950e77dac14770e75e269ee9d958b45e100ff1",
+      "bytes": 2006
+    },
+    "stickers/openmoji/1FAF4.svg": {
+      "blake3": "24622cb2411a09961d48b2ab0e3629edc8fb0acd9e8106d7d7e9c8460d2840d9",
+      "bytes": 2008
+    },
+    "stickers/openmoji/1FAF5.svg": {
+      "blake3": "6fd883842e08876c5170dd0e65baac7d6e2907fdb46c0d3f400cfbd95bd7b7eb",
+      "bytes": 1989
+    },
+    "stickers/openmoji/1FAF6.svg": {
+      "blake3": "da6a0045d52bfdadc3a5f6edf5c77e640faad606badfceef596eb73b1cbbe91e",
+      "bytes": 3106
+    },
+    "stickers/openmoji/1FAF7.svg": {
+      "blake3": "886c2a4412cb44208d2b5491f6432e9f347bb96283acd38f77eced526da6c4e3",
+      "bytes": 1691
+    },
+    "stickers/openmoji/1FAF8.svg": {
+      "blake3": "2e80b831ad86f0d6a2095ebecd551c38f30a1c760f41526150fcb654510ebfc7",
+      "bytes": 1652
+    },
+    "stickers/openmoji/2122.svg": {
+      "blake3": "349858b49c9a00b07d3c69baa1ccf77d5b059e0519050f05fe51ef21adc4cc0f",
+      "bytes": 664
+    },
+    "stickers/openmoji/2611.svg": {
+      "blake3": "c3c25a6a6a4fbf4f23918ba22e77964350ca92b12749f96fca71333c2e4601c7",
+      "bytes": 954
+    },
+    "stickers/openmoji/2615.svg": {
+      "blake3": "35210263568e1b1285cfaac057df979738e4beb4ea25ea5ff52c56d2e76b327c",
+      "bytes": 2540
+    },
+    "stickers/openmoji/261D.svg": {
+      "blake3": "4bf1b31be19575915edd2c63c2d58e4c814dd3876769642851f78cc26798c8bb",
+      "bytes": 3610
+    },
+    "stickers/openmoji/2620.svg": {
+      "blake3": "78e211ef4967dbabff2c6ccd996fc20443f3252a68b9f30b85ab392881d13fb5",
+      "bytes": 6152
+    },
+    "stickers/openmoji/2639.svg": {
+      "blake3": "e7073329df291ef3dabf0f9a2330324b6ef10c17808ab2746a991c965f2b87be",
+      "bytes": 862
+    },
+    "stickers/openmoji/263A.svg": {
+      "blake3": "f7735216321a5920a0a9ef43626fc9cce3aa7488d23e4fdc1526157ca6698716",
+      "bytes": 1399
+    },
+    "stickers/openmoji/267B.svg": {
+      "blake3": "0721cbe2b0dd4a35b6828f38f21ba913178490d48fd3405cdc8377bd12545a06",
+      "bytes": 3152
+    },
+    "stickers/openmoji/2695.svg": {
+      "blake3": "a18370d07db0ee5975ff8a3ad9d776bec463e9ec78a9195f84e90f2f8e15369b",
+      "bytes": 6135
+    },
+    "stickers/openmoji/269C.svg": {
+      "blake3": "b45ffc44c156d756f2325ad25fd239b48985dce6186c14bd9562732031601d50",
+      "bytes": 4769
+    },
+    "stickers/openmoji/2705.svg": {
+      "blake3": "20548677802dc1ad8ac5f1b4acf176b7c46eb1d10a30170a935b4f23e69b235e",
+      "bytes": 1473
+    },
+    "stickers/openmoji/270A.svg": {
+      "blake3": "360b8bdb2651b98584e799f789c43287a0b26c0f9f71464e88be5d412c7d5a30",
+      "bytes": 3972
+    },
+    "stickers/openmoji/270B.svg": {
+      "blake3": "3f09193b26c8dd7873f46893f94897c924ce760c48d7f5f11d85a32e8d14f889",
+      "bytes": 2080
+    },
+    "stickers/openmoji/270C.svg": {
+      "blake3": "d7f7c05fdd7e33b77f98e40d090c8f3ac20bb9e1e62c5669668f0f30916f2c9e",
+      "bytes": 2334
+    },
+    "stickers/openmoji/2714.svg": {
+      "blake3": "4359edf080e9b4af6ae8a9c542e712ef0577030a78101161ed17fd751f18ccdb",
+      "bytes": 427
+    },
+    "stickers/openmoji/2728.svg": {
+      "blake3": "92dc3ebc88c039b0d0dd141d8725ceeec4be9db9a00efa3e91d2cc57743db660",
+      "bytes": 4695
+    },
+    "stickers/openmoji/2733.svg": {
+      "blake3": "9451fd3f91a41468b18828d1f4d0001306a8fe4c4eb1f2ffd772fa2a16174de5",
+      "bytes": 1698
+    },
+    "stickers/openmoji/2734.svg": {
+      "blake3": "a621bed0742249f5ca483d76269bd3877428e57a54b6b903115715dfd3936dde",
+      "bytes": 2073
+    },
+    "stickers/openmoji/2747.svg": {
+      "blake3": "819f186f7747af3ea987356d7dc6e079ad95ca666f57077189cd137e557c0940",
+      "bytes": 1292
+    },
+    "stickers/openmoji/274C.svg": {
+      "blake3": "3ddbca5e8d60d8a7cb2e47677d226ebf86d9cc79f61b01c613f75dd6ee5571ef",
+      "bytes": 632
+    },
+    "stickers/openmoji/274E.svg": {
+      "blake3": "90204078d935d1b7a2769a475ed97749e151349e6cfc9c306f9beecef91a974a",
+      "bytes": 1538
+    },
+    "stickers/openmoji/2763.svg": {
+      "blake3": "23c10033a2303222a0effd70037ea84f77fe289288649a6d33a5a359c0a68681",
+      "bytes": 1201
+    },
+    "stickers/openmoji/2764-FE0F-200D-1F525.svg": {
+      "blake3": "719597fbae51289d2803fb51e3ee2d55d9e797864b834887cc20a4bcaac9e84d",
+      "bytes": 3934
+    },
+    "stickers/openmoji/2764-FE0F-200D-1FA79.svg": {
+      "blake3": "a8496507ec92f4b9638d56b40edeec56aec51ef522f4716dc28894f1b47c9b83",
+      "bytes": 1871
+    },
+    "stickers/openmoji/2764.svg": {
+      "blake3": "f36abb3c7e304e2f6d5fab28ad3dd69e8d50d1dc695eba3c39dbc43e7a33e339",
+      "bytes": 757
+    },
+    "stickers/openmoji/27B0.svg": {
+      "blake3": "99f8b517cdf105fa4b84aeeca9ffe1077dc845f6d4c53b68d29470f714cbaf45",
+      "bytes": 1999
+    },
+    "stickers/openmoji/27BF.svg": {
+      "blake3": "7b1226dd3469898478c6a7ec080c2d56e8b3d27593c8384203e0ccbe54ee3140",
+      "bytes": 2635
+    },
+    "stickers/openmoji/2B55.svg": {
+      "blake3": "f247756a9af037e5b1bfe688469516d65c0daf7c13fbb65ac8a8ee038d3548fe",
+      "bytes": 755
+    },
+    "stickers/openmoji/303D.svg": {
+      "blake3": "dda3b27bb02191ce8a27277631ed8888cf842bfe64dd35fadd5ff79b980c2ae5",
+      "bytes": 995
+    },
+    "stickers/openmoji/LICENSE.txt": {
+      "blake3": "69ae372a9bb95862ad84b6a6c7a7373b0a6d058453e7d39fe7c22021875b613c",
+      "bytes": 20137
+    },
+    "stickers/openmoji/index.json": {
+      "blake3": "66a59c8e4a2f1f054af4ded8f7036742123c99fbb13ef530a6475db3f6893c11",
+      "bytes": 81457
+    }
+  }
+}

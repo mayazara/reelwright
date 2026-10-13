@@ -48,6 +48,7 @@ pub const REOPEN_LABEL: &str = "Open it again";
 pub const SHOW_REPORT_LABEL: &str = "Show crash report";
 
 pub const ABOUT_LABEL: &str = "About";
+pub const LICENCES_LABEL: &str = "Open-source licences";
 
 /// The About window: what the app is and whose work it includes.
 pub fn about(ctx: &egui::Context, open: &mut bool, tokens: Tokens) {
@@ -82,9 +83,28 @@ pub fn about(ctx: &egui::Context, open: &mut bool, tokens: Tokens) {
                 });
         });
         ui.add_space(8.0);
-        if ui.button("Close").clicked() {
-            *open = false;
-        }
+        ui.horizontal(|ui| {
+            if ui.button("Close").clicked() {
+                *open = false;
+            }
+            // The licences of every library compiled into the app, and
+            // FFmpeg's; shipped in the download (not in builds from source).
+            let licences = crate::reveal::licences_dir();
+            let notices = licences
+                .as_ref()
+                .map(|d| d.join("THIRD_PARTY_LICENSES.html"))
+                .filter(|f| f.is_file());
+            if let Some(page) = notices
+                && ui.button(LICENCES_LABEL).clicked()
+            {
+                let _ = crate::reveal::open(&page);
+            }
+            if let Some(dir) = licences
+                && ui.button("Licence files").clicked()
+            {
+                let _ = crate::reveal::open(&dir);
+            }
+        });
     });
     if modal.should_close() {
         *open = false;
