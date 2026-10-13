@@ -33,6 +33,8 @@ pub enum EditorAction {
     ZoomIn,
     ZoomOut,
     ZoomFit,
+    /// Show only the preview, filling the screen (or go back).
+    ToggleFullScreen,
     /// Drop media from the bin onto the timeline.
     InsertMedia {
         media: MediaId,

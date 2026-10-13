@@ -351,7 +351,8 @@ impl Session {
                 }
             }
             // Export is run by the UI, which owns the GPU and dialogs.
-            EditorAction::Export => {}
+            // Handled by the editor window.
+            EditorAction::Export | EditorAction::ToggleFullScreen => {}
             EditorAction::AddMarker => {
                 let at = self.playhead();
                 let _ = self.execute(Box::new(rw_edit::commands::AddMarker::new(at)));

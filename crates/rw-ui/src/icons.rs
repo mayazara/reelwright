@@ -149,6 +149,30 @@ pub fn pause(p: &Painter, r: Rect, color: Color32) {
 
 /// A square button that draws an icon; returns its response. `label` is
 /// the accessible name and tooltip.
+/// Four corner brackets: pointing out to go full screen, in to leave it.
+pub fn full_screen(p: &Painter, r: Rect, leave: bool, color: Color32) {
+    let stroke = Stroke::new(1.6, color);
+    let arm = r.width() * 0.32;
+    for (cx, cy) in [
+        (r.left(), r.top()),
+        (r.right(), r.top()),
+        (r.left(), r.bottom()),
+        (r.right(), r.bottom()),
+    ] {
+        // Direction from the corner towards the middle.
+        let dx = if cx < r.center().x { 1.0 } else { -1.0 };
+        let dy = if cy < r.center().y { 1.0 } else { -1.0 };
+        // Leaving: the bracket's corner sits inward, arms pointing out.
+        let (x, y, sx, sy) = if leave {
+            (cx + dx * arm, cy + dy * arm, -dx, -dy)
+        } else {
+            (cx, cy, dx, dy)
+        };
+        p.line_segment([pos2(x, y), pos2(x + sx * arm, y)], stroke);
+        p.line_segment([pos2(x, y), pos2(x, y + sy * arm)], stroke);
+    }
+}
+
 pub fn button(
     ui: &mut egui::Ui,
     label: &str,

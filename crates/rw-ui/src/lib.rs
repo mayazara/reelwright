@@ -4,6 +4,7 @@ pub mod actions;
 pub mod backgrounds;
 pub mod brand_kit;
 pub mod canvas_tools;
+pub mod cheat_sheet;
 mod editing;
 pub mod export_dialog;
 pub mod format;
@@ -95,6 +96,12 @@ pub struct EditorUi {
     export: Option<ExportJob>,
     export_dialog: Option<export_dialog::ExportDialog>,
     recording: Option<record::Active>,
+    /// Showing only the preview, filling the screen.
+    full_screen: bool,
+    /// What the window was last told (full screen or not).
+    full_screen_applied: bool,
+    /// The keyboard shortcut list is open.
+    pub cheat_sheet: bool,
 }
 
 /// An export running on a background thread.
@@ -153,6 +160,9 @@ impl EditorUi {
             export: None,
             export_dialog: None,
             recording: None,
+            full_screen: false,
+            full_screen_applied: false,
+            cheat_sheet: false,
         };
         ui.reload_brand();
         ui
@@ -378,7 +388,9 @@ impl EditorUi {
 
     /// Applies an action to the open project (export opens its dialog).
     pub fn apply(&mut self, action: EditorAction) {
-        if action == EditorAction::Export {
+        if action == EditorAction::ToggleFullScreen {
+            self.full_screen = !self.full_screen && self.session.is_some();
+        } else if action == EditorAction::Export {
             self.open_export_dialog();
         } else if let Some(s) = self.session.as_mut() {
             s.apply(action);
@@ -438,6 +450,11 @@ impl EditorUi {
             until: Instant::now() + std::time::Duration::from_secs(record::COUNTDOWN),
             choice,
         });
+    }
+
+    /// Whether only the preview is showing, filling the screen.
+    pub fn is_full_screen(&self) -> bool {
+        self.full_screen
     }
 
     /// The recording in progress, if any.
@@ -879,6 +896,12 @@ impl EditorUi {
         if typing {
             return;
         }
+        if self.full_screen && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+            self.full_screen = false;
+        }
+        if ctx.input_mut(|i| i.consume_shortcut(&CHEAT_SHEET)) {
+            self.cheat_sheet = !self.cheat_sheet;
+        }
         // Redo shortcuts first: Cmd+Shift+Z also matches a plain Cmd+Z check.
         if ctx.input_mut(|i| i.consume_shortcut(&REDO) || i.consume_shortcut(&REDO_ALT)) {
             s.redo();
@@ -902,6 +925,12 @@ impl EditorUi {
         let tokens = Tokens::for_mode(self.theme);
         self.pump_jobs();
         self.handle_input(&ctx);
+        // Full screen only while a project is open.
+        self.full_screen &= self.session.is_some();
+        if self.full_screen != self.full_screen_applied {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.full_screen));
+            self.full_screen_applied = self.full_screen;
+        }
 
         if self.session.is_none() {
             if self.home_stale {
@@ -923,6 +952,16 @@ impl EditorUi {
         self.poll_export(&ctx);
         self.show_export_dialog(&ctx, tokens);
         self.tick_recording(&ctx, tokens);
+        cheat_sheet::show(&ctx, &mut self.cheat_sheet, tokens);
+        if self.full_screen {
+            let session = self.session.as_mut().expect("checked above");
+            session.tick_playback();
+            for a in workspace::full_screen_preview(ui, session, tokens) {
+                self.apply(a);
+            }
+            self.end_frame(&ctx);
+            return;
+        }
         self.top_bar(ui, tokens, &mut go_home);
         let session = self.session.as_mut().expect("checked above");
         session.tick_playback();
@@ -944,6 +983,11 @@ impl EditorUi {
             self.close_project();
             return;
         }
+        self.end_frame(&ctx);
+    }
+
+    /// Keeps playback drawing and saves when idle.
+    fn end_frame(&mut self, ctx: &egui::Context) {
         if let Some(s) = self.session.as_mut() {
             if s.player.is_playing() {
                 ctx.request_repaint();
@@ -1056,9 +1100,10 @@ impl EditorUi {
                                 RichText::new(EXPORT_LABEL).color(tokens.on_accent),
                             )
                             .fill(tokens.accent);
+                            let keys = ui.ctx().format_shortcut(&EXPORT_SHORTCUT);
                             if ui
                                 .add(export)
-                                .on_hover_text("Export video (Ctrl+E)")
+                                .on_hover_text(format!("Export video ({keys})"))
                                 .clicked()
                             {
                                 *start_export = true;
@@ -1078,6 +1123,14 @@ impl EditorUi {
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let keys = ui.ctx().format_shortcut(&CHEAT_SHEET);
+                        if ui
+                            .button(cheat_sheet::OPEN_LABEL)
+                            .on_hover_text(format!("{} ({keys})", cheat_sheet::TITLE))
+                            .clicked()
+                        {
+                            self.cheat_sheet = !self.cheat_sheet;
+                        }
                         let color = if s.save_error.is_some() {
                             tokens.danger
                         } else {
@@ -1134,36 +1187,101 @@ impl EditorUi {
     }
 }
 
-/// Keyboard shortcuts from the plan, as actions. Undo/redo/save are handled
-/// separately because they apply even with nothing selected.
-fn shortcuts(ctx: &egui::Context) -> Vec<EditorAction> {
+/// The editor's keyboard shortcuts: keys, action, and what it does (for
+/// the cheat sheet). Undo/redo/save are handled separately because they
+/// apply even with nothing selected; copy/paste arrive as clipboard events.
+pub fn shortcut_table() -> Vec<(KeyboardShortcut, EditorAction, &'static str)> {
     use EditorAction as A;
     let cmd = Modifiers::COMMAND;
     let cmd_shift = Modifiers::COMMAND.plus(Modifiers::SHIFT);
-    let table: [(Modifiers, Key, A); 18] = [
-        (cmd_shift, Key::G, A::Ungroup),
-        (cmd, Key::G, A::Group),
-        (cmd, Key::D, A::Duplicate),
-        (cmd, Key::E, A::Export),
-        (cmd, Key::Equals, A::ZoomIn),
-        (cmd, Key::Plus, A::ZoomIn),
-        (cmd, Key::Minus, A::ZoomOut),
-        (Modifiers::SHIFT, Key::Z, A::ZoomFit),
-        (Modifiers::SHIFT, Key::Delete, A::Delete { ripple: true }),
-        (Modifiers::NONE, Key::Delete, A::Delete { ripple: false }),
-        (Modifiers::NONE, Key::Backspace, A::Delete { ripple: false }),
-        (Modifiers::NONE, Key::Space, A::PlayPause),
-        (Modifiers::NONE, Key::S, A::SplitAtPlayhead),
-        (Modifiers::NONE, Key::M, A::AddMarker),
-        (Modifiers::NONE, Key::ArrowLeft, A::StepFrames(-1)),
-        (Modifiers::NONE, Key::ArrowRight, A::StepFrames(1)),
-        (Modifiers::NONE, Key::ArrowUp, A::PrevEdit),
-        (Modifiers::NONE, Key::ArrowDown, A::NextEdit),
-    ];
+    let k = KeyboardShortcut::new;
+    vec![
+        (k(Modifiers::NONE, Key::Space), A::PlayPause, "Play / pause"),
+        (
+            k(Modifiers::NONE, Key::S),
+            A::SplitAtPlayhead,
+            "Split at the playhead",
+        ),
+        // Shifted keys first: a plain key's shortcut also matches it with
+        // Shift held.
+        (
+            k(Modifiers::SHIFT, Key::Delete),
+            A::Delete { ripple: true },
+            "Delete and close the gap",
+        ),
+        (
+            k(Modifiers::NONE, Key::Delete),
+            A::Delete { ripple: false },
+            "Delete",
+        ),
+        (
+            k(Modifiers::NONE, Key::Backspace),
+            A::Delete { ripple: false },
+            "Delete",
+        ),
+        (k(cmd, Key::D), A::Duplicate, "Duplicate"),
+        (k(cmd_shift, Key::G), A::Ungroup, "Ungroup"),
+        (k(cmd, Key::G), A::Group, "Group"),
+        (
+            k(Modifiers::NONE, Key::ArrowLeft),
+            A::StepFrames(-1),
+            "Back one frame",
+        ),
+        (
+            k(Modifiers::NONE, Key::ArrowRight),
+            A::StepFrames(1),
+            "Forward one frame",
+        ),
+        (
+            k(Modifiers::NONE, Key::ArrowUp),
+            A::PrevEdit,
+            "Previous cut",
+        ),
+        (k(Modifiers::NONE, Key::ArrowDown), A::NextEdit, "Next cut"),
+        (k(Modifiers::NONE, Key::M), A::AddMarker, "Add a marker"),
+        (k(cmd, Key::Equals), A::ZoomIn, "Zoom the timeline in"),
+        (k(cmd, Key::Plus), A::ZoomIn, "Zoom the timeline in"),
+        (k(cmd, Key::Minus), A::ZoomOut, "Zoom the timeline out"),
+        (k(Modifiers::SHIFT, Key::Z), A::ZoomFit, "Fit the timeline"),
+        (
+            k(Modifiers::NONE, Key::F),
+            A::ToggleFullScreen,
+            "Full-screen preview",
+        ),
+        (EXPORT_SHORTCUT, A::Export, "Export"),
+    ]
+}
+
+/// Shortcuts not in [`shortcut_table`], for the cheat sheet.
+pub fn other_shortcuts() -> Vec<(Vec<KeyboardShortcut>, &'static str)> {
+    let cmd = Modifiers::COMMAND;
+    vec![
+        (vec![UNDO], "Undo"),
+        (vec![REDO, REDO_ALT], "Redo"),
+        (vec![KeyboardShortcut::new(cmd, Key::C)], "Copy"),
+        (vec![KeyboardShortcut::new(cmd, Key::V)], "Paste"),
+        (vec![SAVE], "Save now"),
+        (
+            vec![KeyboardShortcut::new(Modifiers::NONE, Key::Escape)],
+            "Leave full screen",
+        ),
+        (vec![CHEAT_SHEET], "Show these shortcuts"),
+    ]
+}
+
+pub const EXPORT_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::E);
+
+/// Opens the shortcut list.
+pub const CHEAT_SHEET: KeyboardShortcut = KeyboardShortcut::new(Modifiers::NONE, Key::Questionmark);
+
+/// Keyboard shortcuts pressed this frame, as actions.
+fn shortcuts(ctx: &egui::Context) -> Vec<EditorAction> {
+    use EditorAction as A;
+    let table = shortcut_table();
     let mut out = Vec::new();
     ctx.input_mut(|i| {
-        for (mods, key, action) in table {
-            if i.consume_shortcut(&KeyboardShortcut::new(mods, key)) {
+        for (keys, action, _) in table {
+            if i.consume_shortcut(&keys) {
                 out.push(action);
             }
         }
@@ -1229,5 +1347,50 @@ impl eframe::App for App {
 
     fn on_exit(&mut self) {
         self.ui.shutdown();
+    }
+}
+
+#[cfg(test)]
+mod shortcut_tests {
+    use super::*;
+
+    /// The actions one key press produces.
+    fn press(key: Key, modifiers: Modifiers) -> Vec<EditorAction> {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            events: vec![egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            }],
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        let mut done = ctx.run_ui(input, |ui| out = shortcuts(ui.ctx()));
+        done.textures_delta.clear();
+        out
+    }
+
+    #[test]
+    fn keys_give_their_actions() {
+        use EditorAction as A;
+        assert_eq!(
+            press(Key::Delete, Modifiers::SHIFT),
+            [A::Delete { ripple: true }]
+        );
+        assert_eq!(
+            press(Key::Delete, Modifiers::NONE),
+            [A::Delete { ripple: false }]
+        );
+        assert_eq!(
+            press(Key::G, Modifiers::COMMAND.plus(Modifiers::SHIFT)),
+            [A::Ungroup]
+        );
+        assert_eq!(press(Key::G, Modifiers::COMMAND), [A::Group]);
+        assert_eq!(press(Key::Z, Modifiers::SHIFT), [A::ZoomFit]);
+        assert_eq!(press(Key::F, Modifiers::NONE), [A::ToggleFullScreen]);
+        assert_eq!(press(Key::E, Modifiers::COMMAND), [A::Export]);
     }
 }

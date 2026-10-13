@@ -69,7 +69,34 @@ struct Viewer<'a> {
     actions: Vec<EditorAction>,
 }
 
-fn preview_panel(ui: &mut egui::Ui, s: &mut Session, tokens: Tokens, out: &mut Vec<EditorAction>) {
+/// Label of the transport button that enters full-screen preview.
+pub const FULL_SCREEN_LABEL: &str = "Full screen (F)";
+/// Label of the same button while in full screen.
+pub const LEAVE_FULL_SCREEN_LABEL: &str = "Leave full screen (Esc)";
+
+/// The preview alone, filling the window (full-screen preview).
+pub fn full_screen_preview(
+    ui: &mut egui::Ui,
+    s: &mut Session,
+    tokens: Tokens,
+) -> Vec<EditorAction> {
+    let mut out = Vec::new();
+    egui::Frame::new()
+        .fill(tokens.preview_backdrop)
+        .show(ui, |ui| {
+            ui.set_min_size(ui.available_size());
+            preview_panel(ui, s, tokens, &mut out, true);
+        });
+    out
+}
+
+fn preview_panel(
+    ui: &mut egui::Ui,
+    s: &mut Session,
+    tokens: Tokens,
+    out: &mut Vec<EditorAction>,
+    full_screen: bool,
+) {
     const CONTROLS: f32 = 34.0;
     let full = ui.available_rect_before_wrap();
     let area = egui::Rect::from_min_max(full.min, egui::pos2(full.max.x, full.max.y - CONTROLS));
@@ -111,11 +138,14 @@ fn preview_panel(ui: &mut egui::Ui, s: &mut Session, tokens: Tokens, out: &mut V
         }
     }
     s.preview = preview;
-    let mut tools = std::mem::take(&mut s.canvas_tools);
-    out.extend(crate::canvas_tools::show(
-        ui, area, img, s, &mut tools, tokens,
-    ));
-    s.canvas_tools = tools;
+    // Full screen is for watching: no editing handles.
+    if !full_screen {
+        let mut tools = std::mem::take(&mut s.canvas_tools);
+        out.extend(crate::canvas_tools::show(
+            ui, area, img, s, &mut tools, tokens,
+        ));
+        s.canvas_tools = tools;
+    }
     if s.project.items().next().is_none() {
         ui.put(
             area,
@@ -166,6 +196,20 @@ fn preview_panel(ui: &mut egui::Ui, s: &mut Session, tokens: Tokens, out: &mut V
             );
         }
     }
+    bar.with_layout(egui::Layout::right_to_left(egui::Align::Center), |bar| {
+        let label = if full_screen {
+            LEAVE_FULL_SCREEN_LABEL
+        } else {
+            FULL_SCREEN_LABEL
+        };
+        if icons::button(bar, label, false, |p, r, c| {
+            icons::full_screen(p, r, full_screen, c)
+        })
+        .clicked()
+        {
+            out.push(EditorAction::ToggleFullScreen);
+        }
+    });
     ui.allocate_rect(full, egui::Sense::hover());
 }
 
@@ -239,7 +283,9 @@ impl TabViewer for Viewer<'_> {
                     self.bin_action = Some(a);
                 }
             }
-            Panel::Preview => preview_panel(ui, self.session, self.tokens, &mut self.actions),
+            Panel::Preview => {
+                preview_panel(ui, self.session, self.tokens, &mut self.actions, false)
+            }
             Panel::Inspector => {
                 let a = inspector::show(ui, &mut *self.session, self.tokens);
                 self.actions.extend(a);
