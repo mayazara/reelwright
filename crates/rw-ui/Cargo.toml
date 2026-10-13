@@ -18,6 +18,7 @@ rw-assets.workspace = true
 rw-render.workspace = true
 rw-fx.workspace = true
 rw-audio.workspace = true
+rw-capture.workspace = true
 crossbeam-channel.workspace = true
 eframe.workspace = true
 egui_dock.workspace = true

@@ -14,6 +14,7 @@ pub mod inspector;
 pub mod layout;
 pub mod media_bin;
 pub mod preview;
+pub mod record;
 mod reveal;
 pub mod session;
 pub mod settings;
@@ -93,6 +94,7 @@ pub struct EditorUi {
     ui_gpu: Option<UiGpu>,
     export: Option<ExportJob>,
     export_dialog: Option<export_dialog::ExportDialog>,
+    recording: Option<record::Active>,
 }
 
 /// An export running on a background thread.
@@ -150,6 +152,7 @@ impl EditorUi {
             ui_gpu,
             export: None,
             export_dialog: None,
+            recording: None,
         };
         ui.reload_brand();
         ui
@@ -341,6 +344,10 @@ impl EditorUi {
             }
             BinAction::Brand(a) => self.handle_brand_action(a),
             BinAction::AddSound(name) => self.add_sound(name),
+            BinAction::StartRecording => {
+                let choice = self.bin.record.choice();
+                self.start_countdown(choice);
+            }
             BinAction::AddGraphic(item) => {
                 if let Some(s) = self.session.as_mut() {
                     s.apply(EditorAction::AddGraphic(item));
@@ -418,6 +425,157 @@ impl EditorUi {
             },
         };
         s.apply(EditorAction::AppendMedia(id));
+    }
+
+    /// Starts the countdown before recording `choice`.
+    fn start_countdown(&mut self, choice: record::Choice) {
+        if choice.is_empty() || self.session.is_none() {
+            return;
+        }
+        // Recording opens the microphone itself.
+        self.bin.record.close_preview();
+        self.recording = Some(record::Active::Countdown {
+            until: Instant::now() + std::time::Duration::from_secs(record::COUNTDOWN),
+            choice,
+        });
+    }
+
+    /// The recording in progress, if any.
+    pub fn recording(&self) -> Option<&record::Active> {
+        self.recording.as_ref()
+    }
+
+    /// Starts recording from `sources` (opened devices, or test sources)
+    /// into the project's Recordings folder. False if it couldn't start.
+    pub fn begin_recording(
+        &mut self,
+        sources: rw_capture::Sources,
+        choice: record::Choice,
+    ) -> bool {
+        let Some(s) = self.session.as_mut() else {
+            return false;
+        };
+        let folder = s.dir.join("Recordings");
+        let options = rw_capture::Options {
+            name: record::next_name(&folder),
+            folder,
+            fps: record::FPS,
+            encoder: None,
+        };
+        match rw_capture::Recorder::start(sources, options, self.bin.record.time.clone()) {
+            Ok(recorder) => {
+                self.recording = Some(record::Active::Running { recorder, choice });
+                true
+            }
+            Err(e) => {
+                s.notify_error(format!("Couldn't start recording: {e}"));
+                self.recording = None;
+                false
+            }
+        }
+    }
+
+    /// Does what the recording window asked.
+    pub fn recording_action(&mut self, action: record::OverlayAction) {
+        use record::OverlayAction as A;
+        match action {
+            A::Pause | A::Resume => {
+                if let Some(record::Active::Running { recorder, .. }) = &self.recording {
+                    if action == A::Pause {
+                        recorder.pause();
+                    } else {
+                        recorder.resume();
+                    }
+                }
+            }
+            A::Cancel => {
+                if matches!(self.recording, Some(record::Active::Countdown { .. })) {
+                    self.recording = None;
+                }
+            }
+            A::Retake | A::Stop => {
+                let Some(record::Active::Running { recorder, choice }) = self.recording.take()
+                else {
+                    return;
+                };
+                if action == A::Retake {
+                    recorder.discard();
+                    self.start_countdown(choice);
+                } else {
+                    let (files, problem) = recorder.finish();
+                    self.place_recording(files, problem, choice.mirror);
+                }
+            }
+        }
+    }
+
+    /// Adds finished recording files to the project at the playhead.
+    fn place_recording(
+        &mut self,
+        files: Vec<rw_capture::RecordedFile>,
+        problem: Option<String>,
+        mirror: bool,
+    ) {
+        let Some(s) = self.session.as_mut() else {
+            return;
+        };
+        if let Some(p) = problem {
+            s.notify_error(format!("Recording stopped early: {p}"));
+        }
+        let ff = Ffmpeg::new();
+        let mut media = Vec::new();
+        for f in files {
+            match rw_engine::import::probe_file(&ff, &f.path) {
+                Ok(m) => media.push((m, f.kind)),
+                Err(e) => s.notify_error(format!(
+                    "Couldn't add {}: {e}",
+                    f.path.file_name().unwrap_or_default().to_string_lossy()
+                )),
+            }
+        }
+        if media.is_empty() {
+            return;
+        }
+        let at = s.playhead();
+        let _ = s.execute(Box::new(record::PlaceRecording::new(media, at, mirror)));
+    }
+
+    /// Moves the countdown on, opens devices when it ends, and shows the
+    /// recording window.
+    fn tick_recording(&mut self, ctx: &egui::Context, tokens: Tokens) {
+        let due = match &self.recording {
+            None => return,
+            Some(record::Active::Countdown { until, choice }) if Instant::now() >= *until => {
+                Some(choice.clone())
+            }
+            Some(record::Active::Running { recorder, .. }) if recorder.problem().is_some() => {
+                // A full disk or a lost device: keep what was recorded.
+                self.recording_action(record::OverlayAction::Stop);
+                return;
+            }
+            Some(_) => None,
+        };
+        if let Some(choice) = due {
+            self.recording = None;
+            let time = self.bin.record.time.clone();
+            match record::open_sources(&choice, &time) {
+                Ok(sources) => {
+                    self.begin_recording(sources, choice);
+                }
+                Err(e) => {
+                    if let Some(s) = self.session.as_mut() {
+                        s.notify_error(e);
+                    }
+                }
+            }
+        }
+        let action = self
+            .recording
+            .as_ref()
+            .and_then(|a| record::overlay(ctx, a, tokens));
+        if let Some(a) = action {
+            self.recording_action(a);
+        }
     }
 
     /// The brand kit's folder, beside the settings.
@@ -764,6 +922,7 @@ impl EditorUi {
         let mut go_home = false;
         self.poll_export(&ctx);
         self.show_export_dialog(&ctx, tokens);
+        self.tick_recording(&ctx, tokens);
         self.top_bar(ui, tokens, &mut go_home);
         let session = self.session.as_mut().expect("checked above");
         session.tick_playback();

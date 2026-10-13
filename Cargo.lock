@@ -3431,6 +3431,7 @@ dependencies = [
  "rw-assets",
  "rw-audio",
  "rw-cache",
+ "rw-capture",
  "rw-edit",
  "rw-engine",
  "rw-fx",

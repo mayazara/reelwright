@@ -61,6 +61,7 @@ pub enum LibraryTab {
     Brand,
     Backgrounds,
     Transitions,
+    Record,
 }
 
 #[derive(Debug, Default)]
@@ -75,6 +76,7 @@ pub struct BinState {
     pub brand: rw_assets::brand::BrandKit,
     pub brand_logos: Vec<String>,
     pub brand_state: crate::brand_kit::BrandState,
+    pub record: crate::record::RecordPanel,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -92,6 +94,8 @@ pub enum BinAction {
     Brand(crate::brand_kit::BrandAction),
     /// Put a bundled sound at the playhead.
     AddSound(&'static str),
+    /// Start the countdown for a recording.
+    StartRecording,
 }
 
 /// Media to show, filtered and sorted. Search matches the name
@@ -142,8 +146,17 @@ pub fn show(
         ui.selectable_value(&mut state.tab, LibraryTab::Brand, "Brand kit");
         ui.selectable_value(&mut state.tab, LibraryTab::Backgrounds, "Backgrounds");
         ui.selectable_value(&mut state.tab, LibraryTab::Transitions, "Transitions");
+        ui.selectable_value(&mut state.tab, LibraryTab::Record, "Record");
     });
     ui.separator();
+    if state.tab != LibraryTab::Record {
+        // Let go of the microphone when it isn't being shown.
+        state.record.close_preview();
+    }
+    if state.tab == LibraryTab::Record {
+        return crate::record::panel(ui, &mut state.record, tokens)
+            .then_some(BinAction::StartRecording);
+    }
     if state.tab == LibraryTab::Backgrounds {
         return crate::backgrounds::show(ui, tokens).map(BinAction::AddGenerated);
     }

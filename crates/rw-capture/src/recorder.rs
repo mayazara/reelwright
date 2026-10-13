@@ -190,19 +190,42 @@ impl Recorder {
                 std::thread::Builder::new()
                     .name("record-video".into())
                     .spawn(move || {
+                        let mut last = None;
                         let mut run = || -> Result<(), String> {
                             while !stop.load(Ordering::Relaxed) {
                                 let frame = source.read().map_err(|e| e.to_string())?;
                                 if let Some(t) = clock.at(clock.source().now()) {
+                                    // Every file starts at the recording's
+                                    // zero: the first picture (devices take
+                                    // a moment to deliver) is shown from 0.
+                                    let index = if last.is_none() {
+                                        0
+                                    } else {
+                                        frame_index(t, fps)
+                                    };
                                     writer
-                                        .write_frame(&frame, frame_index(t, fps))
+                                        .write_frame(&frame, index)
                                         .map_err(|e| e.to_string())?;
+                                    last = Some(frame);
                                 }
                                 if let Some(rx) = &sound {
                                     for chunk in rx.try_iter() {
                                         writer.write_audio(&chunk).map_err(|e| e.to_string())?;
                                     }
                                 }
+                            }
+                            // Every file ends at the same moment: the clock
+                            // is frozen at the stop (by `finish`, or here
+                            // when a problem stopped it), and the last
+                            // picture is held until then.
+                            clock.pause();
+                            let end = frame_index(clock.elapsed(), fps);
+                            if let Some(frame) = &last
+                                && end > 0
+                            {
+                                writer
+                                    .write_frame(frame, end - 1)
+                                    .map_err(|e| e.to_string())?;
                             }
                             // Sound mixed before the stop.
                             if let Some(rx) = &sound {
@@ -314,6 +337,8 @@ impl Recorder {
     /// Stops and finishes the files. Files are complete even when a problem
     /// stopped the recording early; the problem is returned alongside.
     pub fn finish(mut self) -> (Vec<RecordedFile>, Option<String>) {
+        // Freeze time first, so every file ends at this moment.
+        self.clock.pause();
         self.stop.store(true, Ordering::Relaxed);
         for t in self.threads.drain(..) {
             let _ = t.join();

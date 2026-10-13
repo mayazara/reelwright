@@ -126,7 +126,7 @@ pub fn working_encoders(codec: VideoCodec) -> Vec<String> {
         .candidates()
         .into_iter()
         .filter(|n| ff::encoder::find_by_name(n).is_some())
-        .filter(|n| open_video_encoder(n, &probe, true).is_ok())
+        .filter(|n| open_video_encoder(n, &probe, true, false).is_ok())
         .map(str::to_owned)
         .collect();
     found
@@ -350,10 +350,14 @@ fn encode_err(e: ff::Error) -> MediaError {
     MediaError::Encode(e.to_string())
 }
 
+/// Opens encoder `name`. `live` turns off frame reordering (B-frames):
+/// recordings are written as they're captured, and fragmented files have
+/// no edit list to hide the delay reordering adds to the first picture.
 fn open_video_encoder(
     name: &str,
     s: &VideoSettings,
     global_header: bool,
+    live: bool,
 ) -> Result<(ff::encoder::Video, ff::Codec, Pixel), MediaError> {
     let codec = ff::encoder::find_by_name(name)
         .ok_or_else(|| MediaError::Encode(format!("encoder {name} not available")))?;
@@ -381,6 +385,9 @@ fn open_video_encoder(
         s.frame_rate.den as i32,
     )));
     enc.set_bit_rate(s.bit_rate);
+    if live {
+        enc.set_max_b_frames(0);
+    }
     enc.set_max_bit_rate(s.bit_rate * 2);
     enc.set_gop((s.frame_rate.as_f64() * 2.0).round().max(1.0) as u32);
     if global_header {
@@ -453,7 +460,7 @@ impl Mp4Writer {
         let mut last_err = None;
         let mut opened = None;
         for name in &candidates {
-            match open_video_encoder(name, video, global_header) {
+            match open_video_encoder(name, video, global_header, fragmented) {
                 Ok(v) => {
                     opened = Some((name.clone(), v));
                     break;
